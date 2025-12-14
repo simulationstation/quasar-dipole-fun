@@ -33,12 +33,8 @@ Likelihood components (5 terms):
 
 Outputs:
   - posterior_samples.csv     (always writes full 8-parameter vector + derived + ll components)
-  - posterior_summary.json    (per-model summary: posterior stats, WAIC, diagnostics)
-  - model_comparison.json     (if --compare-models, ranked list with WAIC and deltas)
-
-Notes on WAIC here:
-  - The 5 likelihood "components" are treated as separable pseudo-data contributions.
-  - WAIC is computed component-wise and summed (lppd and p_waic additive under independence).
+  - posterior_summary.json    (per-model summary: posterior stats, diagnostics, and loglike scores)
+  - model_comparison.json     (if --compare-models, ranked list with loglike-based deltas)
 """
 
 from __future__ import annotations
@@ -92,6 +88,11 @@ N_STEPS   = 250_000
 BURN_IN   = 50_000
 THIN      = 20
 N_CHAINS  = 6
+
+# Step-size tuning
+TUNE_INTERVAL = 2000
+ACC_TARGET_LOW = 0.25
+ACC_TARGET_HIGH = 0.35
 
 # Faster defaults for --compare-models when user hasn't overridden
 N_STEPS_COMPARE   = 80_000
@@ -515,6 +516,21 @@ def log_posterior(theta_active: np.ndarray, config: ModelConfig,
 # Proposals
 # -------------------------
 
+def build_blocks(config: ModelConfig) -> List[Tuple[str, List[str]]]:
+    blocks: List[Tuple[str, List[str]]] = []
+    if config.has_drift():
+        drift_params = [p for p in ["v_drift_kms", "l_drift_deg", "b_drift_deg"] if p in config.active_params]
+        if drift_params:
+            blocks.append(("drift", drift_params))
+    if config.has_wall():
+        wall_params = [p for p in ["D_wall", "alpha_wall_deg", "phi_wall_deg"] if p in config.active_params]
+        if wall_params:
+            blocks.append(("wall", wall_params))
+    catalog_params = [p for p in ["A_Q", "A_R"] if p in config.active_params]
+    if catalog_params:
+        blocks.append(("catalog", catalog_params))
+    return blocks
+
 def propose(theta_active: np.ndarray, rng: np.random.Generator, config: ModelConfig,
             step_overrides: Optional[Dict[str, float]] = None) -> np.ndarray:
     """Random-walk Gaussian proposal for active params with coordinate wrapping/reflection."""
@@ -561,7 +577,8 @@ def run_chain(theta0: np.ndarray, n_steps: int, rng: np.random.Generator,
               burn_in: int, thin: int, config: ModelConfig,
               sigma_qso: float, sigma_qso_dir: float, dir_like: str,
               step_overrides: Optional[Dict[str, float]] = None,
-              chain_id: int = 0, verbose: bool = True) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+              chain_id: int = 0, verbose: bool = True,
+              tune_steps: bool = True) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float, Dict[str, float]]:
     """
     Run a single Metropolis-Hastings chain.
 
@@ -579,26 +596,60 @@ def run_chain(theta0: np.ndarray, n_steps: int, rng: np.random.Generator,
     if not np.isfinite(logp):
         raise RuntimeError(f"Chain {chain_id}: initial theta has -inf posterior; pick a better start.")
 
-    accepted = 0
+    base_steps = config.step_sizes.copy()
+    if step_overrides:
+        for k, v in step_overrides.items():
+            base_steps[k] = float(v)
+
+    blocks = build_blocks(config)
+    block_scales = {name: 1.0 for name, _ in blocks}
+    block_accepts = {name: 0 for name, _ in blocks}
+    block_proposals = {name: 0 for name, _ in blocks}
+    param_to_block = {p: name for name, params in blocks for p in params}
+
+    accepted_total = 0
+    proposals_total = 0
     samples: List[np.ndarray] = []
     ll_totals: List[float] = []
     ll_components: List[np.ndarray] = []
 
     for t in range(int(n_steps)):
-        th_prop = propose(theta, rng, config, step_overrides)
-        ll_total_p, ll_vec_p = loglike_components(th_prop, config, sigma_qso, sigma_qso_dir, dir_like)
-        lp_p = log_prior(th_prop, config)
-        logp_p = lp_p + ll_total_p
+        for block_name, params in blocks:
+            step_for_block = {p: 0.0 for p in config.active_params}
+            for p in params:
+                step_for_block[p] = base_steps[p] * block_scales[block_name]
 
-        if np.isfinite(logp_p):
-            u = float(rng.random())
-            log_u = math.log(u) if u > 0.0 else -np.inf
-            if log_u < (logp_p - logp):
-                theta = th_prop
-                logp = logp_p
-                ll_total = ll_total_p
-                ll_vec = ll_vec_p
-                accepted += 1
+            th_prop = propose(theta, rng, config, step_for_block)
+            block_proposals[block_name] += 1
+            proposals_total += 1
+
+            ll_total_p, ll_vec_p = loglike_components(th_prop, config, sigma_qso, sigma_qso_dir, dir_like)
+            lp_p = log_prior(th_prop, config)
+            logp_p = lp_p + ll_total_p
+
+            if np.isfinite(logp_p):
+                u = float(rng.random())
+                log_u = math.log(u) if u > 0.0 else -np.inf
+                if log_u < (logp_p - logp):
+                    theta = th_prop
+                    logp = logp_p
+                    ll_total = ll_total_p
+                    ll_vec = ll_vec_p
+                    block_accepts[block_name] += 1
+                    accepted_total += 1
+
+        if tune_steps and (t + 1) % TUNE_INTERVAL == 0 and t < burn_in:
+            for block_name, _ in blocks:
+                prop = block_proposals[block_name]
+                acc = block_accepts[block_name]
+                if prop > 0:
+                    rate = acc / prop
+                    if rate > ACC_TARGET_HIGH:
+                        block_scales[block_name] *= math.exp(0.05)
+                    elif rate < ACC_TARGET_LOW:
+                        block_scales[block_name] *= math.exp(-0.05)
+                block_proposals[block_name] = 0
+                block_accepts[block_name] = 0
 
         if t >= burn_in and ((t - burn_in) % thin == 0):
             samples.append(theta.copy())
@@ -606,15 +657,29 @@ def run_chain(theta0: np.ndarray, n_steps: int, rng: np.random.Generator,
             ll_components.append(ll_vec.copy())
 
         if verbose and (t + 1) % 50_000 == 0:
-            print(f"  Chain {chain_id}: step {t+1}/{n_steps}  accept_rate={accepted/(t+1):.3f}")
+            acc_rate = accepted_total / proposals_total if proposals_total else 0.0
+            print(f"  Chain {chain_id}: step {t+1}/{n_steps}  accept_rate={acc_rate:.3f}")
 
-    return np.array(samples, dtype=float), np.array(ll_totals, dtype=float), np.array(ll_components, dtype=float), float(accepted / n_steps)
+    final_steps = {}
+    for p in config.active_params:
+        block = param_to_block[p]
+        final_steps[p] = base_steps[p] * block_scales[block]
+
+    accept_rate_total = accepted_total / proposals_total if proposals_total else 0.0
+    return (
+        np.array(samples, dtype=float),
+        np.array(ll_totals, dtype=float),
+        np.array(ll_components, dtype=float),
+        float(accept_rate_total),
+        final_steps,
+    )
 
 def run_multi_chain(config: ModelConfig, n_chains: int, n_steps: int, burn_in: int, thin: int,
                     sigma_qso: float, sigma_qso_dir: float, dir_like: str,
                     step_overrides: Optional[Dict[str, float]] = None,
-                    base_seed: int = 42, verbose: bool = True
-                    ) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray], List[float]]:
+                    base_seed: int = 42, verbose: bool = True,
+                    tune_steps: bool = True
+                    ) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray], List[float], List[Dict[str, float]]]:
     """
     Returns:
       chains             list of arrays (S_c, n_active)
@@ -626,6 +691,7 @@ def run_multi_chain(config: ModelConfig, n_chains: int, n_steps: int, burn_in: i
     ll_totals_list: List[np.ndarray] = []
     ll_components_list: List[np.ndarray] = []
     acceptance_rates: List[float] = []
+    final_steps_list: List[Dict[str, float]] = []
 
     for c in range(int(n_chains)):
         seed = int(base_seed + c * 1000)
@@ -635,21 +701,22 @@ def run_multi_chain(config: ModelConfig, n_chains: int, n_steps: int, burn_in: i
         if verbose:
             print(f"\nStarting chain {c} with seed={seed}")
 
-        samples, ll_totals, ll_comps, acc = run_chain(
+        samples, ll_totals, ll_comps, acc, final_steps = run_chain(
             theta0, n_steps, rng, burn_in, thin, config,
             sigma_qso, sigma_qso_dir, dir_like, step_overrides,
-            chain_id=c, verbose=verbose
+            chain_id=c, verbose=verbose, tune_steps=tune_steps
         )
 
         chains.append(samples)
         ll_totals_list.append(ll_totals)
         ll_components_list.append(ll_comps)
         acceptance_rates.append(acc)
+        final_steps_list.append(final_steps)
 
         if verbose:
             print(f"  Chain {c} done: {len(samples)} samples, acceptance={acc:.3f}")
 
-    return chains, ll_totals_list, ll_components_list, acceptance_rates
+    return chains, ll_totals_list, ll_components_list, acceptance_rates, final_steps_list
 
 # -------------------------
 # WAIC (component-wise)
@@ -704,6 +771,14 @@ def compute_ll_component_stats(ll_components: np.ndarray) -> Dict[str, Dict[str,
             "max": float(np.max(col)),
         }
     return stats
+
+
+def compute_loglike_scores(ll_total: np.ndarray) -> Dict[str, float]:
+    return {
+        "mean_loglike": float(np.mean(ll_total)) if ll_total.size else float("nan"),
+        "log_mean_exp": float(log_mean_exp(ll_total)) if ll_total.size else float("nan"),
+        "max_loglike": float(np.max(ll_total)) if ll_total.size else float("nan"),
+    }
 
 # -------------------------
 # Diagnostics (R-hat, ESS)
@@ -906,14 +981,13 @@ def write_summary_json(
     ess: np.ndarray,
     config: ModelConfig,
     dir_like: str,
-    waic_total: Tuple[float, float, float],
-    waic_breakdown: Dict[str, Dict[str, float]],
+    loglike_scores: Dict[str, float],
     ll_comp_stats: Dict[str, Dict[str, float]],
+    final_step_sizes: Dict[str, float],
     filename: str,
 ) -> None:
     combined = np.vstack(chains)
     combined_ll = np.concatenate(ll_totals_list)
-    lppd, p_waic, waic = waic_total
 
     param_stats = compute_param_stats(combined, config.active_params)
     derived_stats = compute_derived_stats(combined, config)
@@ -931,8 +1005,7 @@ def write_summary_json(
         "samples_per_chain": int(chains[0].shape[0]) if chains else 0,
         "total_samples": int(combined.shape[0]),
         "acceptance_rates": [float(a) for a in acceptance_rates],
-        "waic": {"lppd": float(lppd), "p_waic": float(p_waic), "waic": float(waic)},
-        "waic_components": waic_breakdown,
+        "loglike_scores": loglike_scores,
         "ll_component_stats": ll_comp_stats,
         "ll_total_stats": {
             "mean": float(np.mean(combined_ll)),
@@ -940,6 +1013,7 @@ def write_summary_json(
             "min": float(np.min(combined_ll)),
             "max": float(np.max(combined_ll)),
         },
+        "step_sizes": final_step_sizes,
         "parameters": param_stats,
         "derived": derived_stats,
         "convergence": {
@@ -978,7 +1052,7 @@ def run_single_model(config: ModelConfig, args: argparse.Namespace, verbose: boo
         print(f"Directional likelihood: {args.dir_like} (sigma_dir_deg={args.sigma_qso_dir})")
         print("=" * 60)
 
-    chains, ll_totals_list, ll_components_list, acceptance_rates = run_multi_chain(
+    chains, ll_totals_list, ll_components_list, acceptance_rates, final_steps_list = run_multi_chain(
         config=config,
         n_chains=args.n_chains,
         n_steps=args.n_steps,
@@ -990,6 +1064,7 @@ def run_single_model(config: ModelConfig, args: argparse.Namespace, verbose: boo
         step_overrides=step_overrides,
         base_seed=args.seed,
         verbose=verbose,
+        tune_steps=not args.no_tune,
     )
 
     combined = np.vstack(chains)
@@ -999,24 +1074,33 @@ def run_single_model(config: ModelConfig, args: argparse.Namespace, verbose: boo
     rhat = gelman_rubin(chains)
     ess = combined_ess(chains)
 
-    waic_total, waic_breakdown = compute_waic_components(combined_ll_comp)
     ll_comp_stats = compute_ll_component_stats(combined_ll_comp)
+    loglike_scores = compute_loglike_scores(combined_ll_total)
+    if final_steps_list:
+        final_steps = {
+            p: float(np.mean([fs[p] for fs in final_steps_list if p in fs]))
+            for p in config.active_params
+        }
+    else:
+        final_steps = {p: None for p in config.active_params}
 
     if verbose:
-        lppd, p_waic, waic = waic_total
         print("\n" + "-" * 40)
-        print("WAIC (component-wise):")
-        print(f"  Total: lppd={lppd:.4f}, p_waic={p_waic:.4f}, WAIC={waic:.4f}")
-        print("\n  Per-component breakdown:")
-        print(f"  {'Component':<25} {'lppd':>10} {'p_waic':>10} {'waic':>10}")
-        print("  " + "-" * 55)
-        for name in LL_COMPONENT_NAMES:
-            b = waic_breakdown[name]
-            print(f"  {name:<25} {b['lppd']:>10.4f} {b['p_waic']:>10.4f} {b['waic']:>10.4f}")
+        print("Log-likelihood scores:")
+        print(f"  mean_loglike   = {loglike_scores['mean_loglike']:.4f}")
+        print(f"  log_mean_exp   = {loglike_scores['log_mean_exp']:.4f}")
+        print(f"  max_loglike    = {loglike_scores['max_loglike']:.4f}")
 
         print("\nLog-likelihood total stats:")
         print(f"  mean = {np.mean(combined_ll_total):.4f}, std = {np.std(combined_ll_total):.4f}")
         print(f"  min  = {np.min(combined_ll_total):.4f}, max = {np.max(combined_ll_total):.4f}")
+
+        print("\nComponent loglike breakdown (mean/std/min/max):")
+        print(f"  {'Component':<25} {'mean':>10} {'std':>10} {'min':>10} {'max':>10}")
+        print("  " + "-" * 55)
+        for name in LL_COMPONENT_NAMES:
+            stats = ll_comp_stats[name]
+            print(f"  {name:<25} {stats['mean']:>10.4f} {stats['std']:>10.4f} {stats['min']:>10.4f} {stats['max']:>10.4f}")
 
     return {
         "config": config,
@@ -1026,12 +1110,13 @@ def run_single_model(config: ModelConfig, args: argparse.Namespace, verbose: boo
         "acceptance_rates": acceptance_rates,
         "R_hat": rhat,
         "ess": ess,
-        "waic_total": waic_total,
-        "waic_breakdown": waic_breakdown,
+        "loglike_scores": loglike_scores,
         "ll_comp_stats": ll_comp_stats,
         "combined": combined,
         "combined_ll_total": combined_ll_total,
         "combined_ll_comp": combined_ll_comp,
+        "final_steps_list": final_steps_list,
+        "final_steps": final_steps,
     }
 
 # -------------------------
@@ -1084,9 +1169,9 @@ def run_model_comparison(args: argparse.Namespace, verbose: bool = True) -> List
             ess=result["ess"],
             config=result["config"],
             dir_like=cargs.dir_like,
-            waic_total=result["waic_total"],
-            waic_breakdown=result["waic_breakdown"],
+            loglike_scores=result["loglike_scores"],
             ll_comp_stats=result["ll_comp_stats"],
+            final_step_sizes=result["final_steps"],
             filename=summary_file,
         )
 
@@ -1098,37 +1183,24 @@ def run_model_comparison(args: argparse.Namespace, verbose: bool = True) -> List
         result["summary_json"] = summary_file
         results.append(result)
 
-    # Ranked by WAIC
-    ranked = sorted(results, key=lambda r: r["waic_total"][2])
+    # Ranked by log predictive density proxy (log_mean_exp of loglike)
+    ranked = sorted(results, key=lambda r: r["loglike_scores"]["log_mean_exp"], reverse=True)
     best = ranked[0]
-    best_waic = best["waic_total"][2]
-    best_breakdown = best["waic_breakdown"]
+    best_lme = best["loglike_scores"]["log_mean_exp"]
 
     print("\n" + "=" * 70)
-    print("MODEL COMPARISON RESULTS (ranked by WAIC)")
+    print("MODEL COMPARISON RESULTS (ranked by log_mean_exp(loglike))")
     print("=" * 70)
-    print(f"\n{'Model':<15} {'WAIC':>10} {'ΔWAIC':>10} {'p_waic':>10} {'lppd':>10} {'n_par':>6}")
+    print(f"\n{'Model':<15} {'log_mean_exp':>14} {'Δ':>10} {'mean_ll':>12} {'max_ll':>12} {'n_par':>6}")
     print("-" * 70)
 
     for r in ranked:
         mode = r["config"].mode
-        lppd, p_waic, waic = r["waic_total"]
+        scores = r["loglike_scores"]
         n_par = r["config"].n_params
-        delta = waic - best_waic
-        delta_str = f"{delta:+.2f}" if delta > 0 else "(best)"
-        print(f"{mode:<15} {waic:>10.2f} {delta_str:>10} {p_waic:>10.2f} {lppd:>10.2f} {n_par:>6}")
-
-        if delta > 0:
-            comp_deltas: List[Tuple[str, float]] = []
-            for name in LL_COMPONENT_NAMES:
-                d = r["waic_breakdown"][name]["waic"] - best_breakdown[name]["waic"]
-                if abs(d) > 0.01:
-                    comp_deltas.append((name, float(d)))
-            comp_deltas.sort(key=lambda x: -abs(x[1]))
-            top2 = comp_deltas[:2]
-            if top2:
-                contrib = ", ".join([f"{n}:{d:+.2f}" for n, d in top2])
-                print(f"{'':15} top ΔWAIC contributors: {contrib}")
+        delta = scores["log_mean_exp"] - best_lme
+        delta_str = f"{delta:+.2f}" if delta < 0 else "(best)"
+        print(f"{mode:<15} {scores['log_mean_exp']:>14.4f} {delta_str:>10} {scores['mean_loglike']:>12.4f} {scores['max_loglike']:>12.4f} {n_par:>6}")
 
     print("\n" + "-" * 70)
     print("Log-likelihood stats per model:")
@@ -1158,22 +1230,20 @@ def run_sigma_sweep(args: argparse.Namespace, verbose: bool = True) -> List[Dict
             print("=" * 70)
 
         res = run_model_comparison(sweep_args, verbose=verbose)
-        ranked = sorted(res, key=lambda r: r["waic_total"][2])
+        ranked = sorted(res, key=lambda r: r["loglike_scores"]["log_mean_exp"], reverse=True)
         best_model = ranked[0]["config"].mode
-        best_waic = ranked[0]["waic_total"][2]
+        best_lme = ranked[0]["loglike_scores"]["log_mean_exp"]
         second_best_delta: Optional[float] = None
         if len(ranked) > 1:
-            second_best_delta = ranked[1]["waic_total"][2] - best_waic
+            second_best_delta = ranked[1]["loglike_scores"]["log_mean_exp"] - best_lme
 
         per_model: List[Dict[str, Any]] = []
         for r in ranked:
-            lppd, p_waic, waic = r["waic_total"]
             per_model.append({
                 "model": r["config"].mode,
-                "waic": float(waic),
-                "delta_waic": float(waic - best_waic),
-                "lppd": float(lppd),
-                "p_waic": float(p_waic),
+                "log_mean_exp": float(r["loglike_scores"]["log_mean_exp"]),
+                "delta_log_mean_exp": float(r["loglike_scores"]["log_mean_exp"] - best_lme),
+                "mean_loglike": float(r["loglike_scores"]["mean_loglike"]),
             })
 
         all_results.append({
@@ -1181,9 +1251,9 @@ def run_sigma_sweep(args: argparse.Namespace, verbose: bool = True) -> List[Dict
             "dir_like": args.dir_like,
             "per_model": per_model,
             "best_model": best_model,
-            "best_waic": float(best_waic),
+            "best_log_mean_exp": float(best_lme),
         })
-        table_rows.append((float(sigma), best_model, float(best_waic), second_best_delta))
+        table_rows.append((float(sigma), best_model, float(best_lme), second_best_delta))
 
     with open("sweep_results.json", "w", encoding="utf-8") as f:
         json.dump(all_results, f, indent=2)
@@ -1192,10 +1262,10 @@ def run_sigma_sweep(args: argparse.Namespace, verbose: bool = True) -> List[Dict
         print("\n" + "=" * 50)
         print("Sigma sweep summary (best models)")
         print("=" * 50)
-        print(f"{'sigma_dir':>10} {'best':>10} {'WAIC':>10} {'ΔWAIC2':>10}")
-        for sigma, best, waic, delta2 in table_rows:
+        print(f"{'sigma_dir':>10} {'best':>10} {'log_mean_exp':>14} {'Δ2':>10}")
+        for sigma, best, lme, delta2 in table_rows:
             delta_str = "-" if delta2 is None else f"{delta2:+.2f}"
-            print(f"{sigma:10.3f} {best:>10} {waic:10.2f} {delta_str:>10}")
+            print(f"{sigma:10.3f} {best:>10} {lme:14.2f} {delta_str:>10}")
 
     return all_results
 
@@ -1209,7 +1279,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", type=str, default="full", choices=MODEL_MODES,
                         help="Model mode (default: full)")
     parser.add_argument("--compare-models", action="store_true",
-                        help="Run all models and compare WAIC")
+                        help="Run all models and compare loglike-based scores")
     parser.add_argument("--dir-like", type=str, default="gaussian_angle", choices=DIR_LIKE_CHOICES,
                         help="Directional likelihood: Gaussian on angle or von Mises-Fisher")
     parser.add_argument("--sweep-sigma-dir", type=lambda s: [float(x) for x in s.split(",") if x.strip()], default=None,
@@ -1232,6 +1302,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--step-phi-wall", type=float, default=STEP_PHI_WALL)
     parser.add_argument("--step-a-q", type=float, default=STEP_A_Q)
     parser.add_argument("--step-a-r", type=float, default=STEP_A_R)
+
+    parser.add_argument("--no-tune", action="store_true",
+                        help="Disable automatic step-size tuning during burn-in")
 
     parser.add_argument("--quiet", action="store_true")
     return parser.parse_args()
@@ -1264,22 +1337,21 @@ def main() -> None:
         results = run_model_comparison(args, verbose=verbose)
 
         comparison_file = "model_comparison.json"
-        ranked = sorted(results, key=lambda r: r["waic_total"][2])
+        ranked = sorted(results, key=lambda r: r["loglike_scores"]["log_mean_exp"], reverse=True)
 
         out: List[Dict[str, Any]] = []
         for r in ranked:
-            lppd, p_waic, waic = r["waic_total"]
             out.append({
                 "model": r["config"].mode,
                 "dir_like": args.dir_like,
                 "sigma_qso_dir": float(args.sigma_qso_dir),
-                "waic": float(waic),
-                "lppd": float(lppd),
-                "p_waic": float(p_waic),
+                "log_mean_exp": float(r["loglike_scores"]["log_mean_exp"]),
+                "mean_loglike": float(r["loglike_scores"]["mean_loglike"]),
+                "max_loglike": float(r["loglike_scores"]["max_loglike"]),
                 "n_params": int(r["config"].n_params),
                 "active_params": r["config"].active_params,
                 "mean_acceptance": float(np.mean(r["acceptance_rates"])),
-                "waic_components": r["waic_breakdown"],
+                "ll_component_stats": r["ll_comp_stats"],
                 "samples_csv": r.get("samples_csv", f"posterior_samples_{r['config'].mode}.csv"),
                 "summary_json": r.get("summary_json", f"posterior_summary_{r['config'].mode}.json"),
             })
@@ -1312,10 +1384,9 @@ def main() -> None:
     acceptance_rates = result["acceptance_rates"]
     rhat = result["R_hat"]
     ess = result["ess"]
-    waic_total = result["waic_total"]
-    waic_breakdown = result["waic_breakdown"]
     ll_comp_stats = result["ll_comp_stats"]
     combined = result["combined"]
+    loglike_scores = result["loglike_scores"]
 
     if verbose:
         print("\n" + "-" * 40)
@@ -1381,9 +1452,9 @@ def main() -> None:
         ess=ess,
         config=config,
         dir_like=args.dir_like,
-        waic_total=waic_total,
-        waic_breakdown=waic_breakdown,
+        loglike_scores=loglike_scores,
         ll_comp_stats=ll_comp_stats,
+        final_step_sizes=result["final_steps"],
         filename=SUMMARY_JSON,
     )
     if verbose:
