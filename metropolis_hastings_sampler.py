@@ -2,6 +2,11 @@
 """
 Metropolis-Hastings sampler for a "bubble mapping" dipole model with model comparison.
 
+Supports leave-one-constraint-out (LOCO) validation and alternative directional likelihoods
+(Gaussian angle or von Mises-Fisher) for the CatWISE direction term. Use `--loco` with
+`--holdout` to run posterior predictive checks that train on 4/5 components and score the
+held-out constraint, e.g. `python metropolis_hastings_sampler.py --loco --holdout catwise_dir`.
+
 Physical interpretation:
   - Drift component: frame motion through parent trough, produces kinematic-like dipole
   - Wall component: off-center geometric term, catalog-independent residual
@@ -43,7 +48,7 @@ import argparse
 import json
 import math
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import numpy as np
 
@@ -124,6 +129,13 @@ EPS_SIN  = 1e-12
 EPS_NORM = 1e-15
 
 DIR_LIKE_CHOICES = ["gaussian_angle", "vmf"]
+HOLDOUT_CHOICES = [
+    "wagenveld_wall_amp",
+    "wagenveld_wall_angle",
+    "catwise_amp",
+    "catwise_dir",
+    "radio_ratio",
+]
 
 # Model modes
 MODEL_MODES = ["full", "wall_only", "drift_only", "cmb_only"]
@@ -277,6 +289,15 @@ def log_sinh_stable(x: float) -> float:
     if x > 50.0:
         return float(x - math.log(2.0))
     return float(math.log(math.sinh(x)))
+
+
+def convert_sigma_dir_to_kappa(sigma_dir_deg: float) -> float:
+    """Approximate vMF concentration kappa from sigma in degrees (capped for stability)."""
+    sigma_rad = math.radians(sigma_dir_deg)
+    if sigma_rad <= 0.0:
+        return float("inf")
+    kappa = 2.0 / (sigma_rad * sigma_rad)
+    return min(kappa, 1e6)
 
 # -------------------------
 # Precompute fixed quantities
@@ -439,14 +460,28 @@ def log_prior(theta_active: np.ndarray, config: ModelConfig) -> float:
 
     return float(lp)
 
-def loglike_components(theta_active: np.ndarray, config: ModelConfig,
-                       sigma_qso: float, sigma_qso_dir: float, dir_like: str) -> Tuple[float, np.ndarray]:
+def loglike_components(
+    theta_active: np.ndarray,
+    config: ModelConfig,
+    sigma_qso: float,
+    sigma_qso_dir: float,
+    dir_like: str,
+    drop_components: Optional[Set[str]] = None,
+) -> Tuple[float, np.ndarray, np.ndarray]:
     """
     Component-wise log-likelihood vector (length 5) + total.
 
-    If wall inactive, components 0 and 1 are 0.0.
-    On invalid evaluation returns (-inf, [-inf]*5).
+    If wall inactive, components 0 and 1 are 0.0. Components listed in
+    drop_components are zeroed in the returned ll_total and ll_vec_used.
+    On invalid evaluation returns (-inf, [-inf]*5, [-inf]*5).
     """
+    if dir_like not in DIR_LIKE_CHOICES:
+        raise ValueError(f"Unknown dir_like {dir_like}; must be one of {DIR_LIKE_CHOICES}")
+    drop_components = set(drop_components or [])
+    unknown = drop_components.difference(LL_COMPONENT_NAMES)
+    if unknown:
+        raise ValueError(f"Unknown drop_components: {sorted(unknown)}")
+
     theta_full = config.active_to_full_theta(theta_active)
     D_wall = float(theta_full[3])
     alpha_wall = float(theta_full[4])
@@ -455,59 +490,69 @@ def loglike_components(theta_active: np.ndarray, config: ModelConfig,
     D_Q_amp = float(np.linalg.norm(D_Q_vec))
     D_R_amp = float(np.linalg.norm(D_R_vec))
 
-    ll_vec = np.zeros(N_LL_COMPONENTS, dtype=float)
+    ll_vec_full = np.zeros(N_LL_COMPONENTS, dtype=float)
+    invalid = np.full(N_LL_COMPONENTS, -np.inf, dtype=float)
 
     # 0) wall amplitude
     if config.has_wall():
-        ll_vec[0] = log_gauss(D_wall, D_WALL_MEAN, D_WALL_SIG)
+        ll_vec_full[0] = log_gauss(D_wall, D_WALL_MEAN, D_WALL_SIG)
 
     # 1) wall angle (alpha)
     if config.has_wall():
-        ll_vec[1] = log_gauss(alpha_wall, ANG_WALL_CMB_MEAN_DEG, ANG_WALL_CMB_SIG_DEG)
+        ll_vec_full[1] = log_gauss(alpha_wall, ANG_WALL_CMB_MEAN_DEG, ANG_WALL_CMB_SIG_DEG)
 
     # 2) CatWISE amplitude
-    ll_vec[2] = log_gauss(D_Q_amp, D_QSO_OBS, sigma_qso)
+    ll_vec_full[2] = log_gauss(D_Q_amp, D_QSO_OBS, sigma_qso)
 
     # 3) CatWISE direction
     if D_Q_amp < EPS_NORM:
-        return -np.inf, np.full(N_LL_COMPONENTS, -np.inf, dtype=float)
+        return -np.inf, invalid, invalid
     dhat_Q = D_Q_vec / D_Q_amp
     ang = angle_deg(dhat_Q, n_QSO_obs)
     if np.isnan(ang):
-        return -np.inf, np.full(N_LL_COMPONENTS, -np.inf, dtype=float)
+        return -np.inf, invalid, invalid
 
     if dir_like == "gaussian_angle":
-        ll_vec[3] = log_gauss(float(ang), 0.0, sigma_qso_dir)
+        ll_vec_full[3] = log_gauss(float(ang), 0.0, sigma_qso_dir)
     elif dir_like == "vmf":
         sigma_rad = math.radians(sigma_qso_dir)
         if sigma_rad <= 0.0:
-            return -np.inf, np.full(N_LL_COMPONENTS, -np.inf, dtype=float)
-        # small-angle approximation: kappa ≈ 1/sigma^2
-        kappa = 1.0 / (sigma_rad * sigma_rad)
+            return -np.inf, invalid, invalid
+        kappa = convert_sigma_dir_to_kappa(sigma_qso_dir)
         dot = float(np.dot(dhat_Q, n_QSO_obs))
         dot = max(-1.0, min(1.0, dot))
-        logC = math.log(kappa) - math.log(4.0 * math.pi) - log_sinh_stable(kappa)
-        ll_vec[3] = kappa * dot - logC
-    else:
-        return -np.inf, np.full(N_LL_COMPONENTS, -np.inf, dtype=float)
+        ll_vec_full[3] = kappa * dot
 
     # 4) Radio ratio
     if D_kin_R < EPS_NORM:
-        return -np.inf, np.full(N_LL_COMPONENTS, -np.inf, dtype=float)
+        return -np.inf, invalid, invalid
     r_model = D_R_amp / float(D_kin_R)
-    ll_vec[4] = log_gauss(float(r_model), R_RADIO_MEAN, R_RADIO_SIG)
+    ll_vec_full[4] = log_gauss(float(r_model), R_RADIO_MEAN, R_RADIO_SIG)
 
-    ll_total = float(np.sum(ll_vec))
+    ll_vec_used = ll_vec_full.copy()
+    for name in drop_components:
+        idx = LL_COMPONENT_NAMES.index(name)
+        ll_vec_used[idx] = 0.0
+
+    ll_total = float(np.sum(ll_vec_used))
     if not np.isfinite(ll_total):
-        return -np.inf, np.full(N_LL_COMPONENTS, -np.inf, dtype=float)
-    return ll_total, ll_vec
+        return -np.inf, invalid, invalid
+    return ll_total, ll_vec_full, ll_vec_used
 
-def log_posterior(theta_active: np.ndarray, config: ModelConfig,
-                  sigma_qso: float, sigma_qso_dir: float, dir_like: str) -> float:
+def log_posterior(
+    theta_active: np.ndarray,
+    config: ModelConfig,
+    sigma_qso: float,
+    sigma_qso_dir: float,
+    dir_like: str,
+    drop_components: Optional[Set[str]] = None,
+) -> float:
     lp = log_prior(theta_active, config)
     if not np.isfinite(lp):
         return -np.inf
-    ll_total, _ = loglike_components(theta_active, config, sigma_qso, sigma_qso_dir, dir_like)
+    ll_total, _, _ = loglike_components(
+        theta_active, config, sigma_qso, sigma_qso_dir, dir_like, drop_components=drop_components
+    )
     if not np.isfinite(ll_total):
         return -np.inf
     return float(lp + ll_total)
@@ -576,6 +621,7 @@ def propose(theta_active: np.ndarray, rng: np.random.Generator, config: ModelCon
 def run_chain(theta0: np.ndarray, n_steps: int, rng: np.random.Generator,
               burn_in: int, thin: int, config: ModelConfig,
               sigma_qso: float, sigma_qso_dir: float, dir_like: str,
+              drop_components: Optional[Set[str]] = None,
               step_overrides: Optional[Dict[str, float]] = None,
               chain_id: int = 0, verbose: bool = True,
               tune_steps: bool = True) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float, Dict[str, float]]:
@@ -589,7 +635,9 @@ def run_chain(theta0: np.ndarray, n_steps: int, rng: np.random.Generator,
       acceptance_rate  float
     """
     theta = theta0.copy()
-    ll_total, ll_vec = loglike_components(theta, config, sigma_qso, sigma_qso_dir, dir_like)
+    ll_total, ll_vec_full, ll_vec_used = loglike_components(
+        theta, config, sigma_qso, sigma_qso_dir, dir_like, drop_components=drop_components
+    )
     lp = log_prior(theta, config)
     logp = lp + ll_total
 
@@ -623,7 +671,9 @@ def run_chain(theta0: np.ndarray, n_steps: int, rng: np.random.Generator,
             block_proposals[block_name] += 1
             proposals_total += 1
 
-            ll_total_p, ll_vec_p = loglike_components(th_prop, config, sigma_qso, sigma_qso_dir, dir_like)
+            ll_total_p, ll_vec_full_p, ll_vec_used_p = loglike_components(
+                th_prop, config, sigma_qso, sigma_qso_dir, dir_like, drop_components=drop_components
+            )
             lp_p = log_prior(th_prop, config)
             logp_p = lp_p + ll_total_p
 
@@ -634,7 +684,8 @@ def run_chain(theta0: np.ndarray, n_steps: int, rng: np.random.Generator,
                     theta = th_prop
                     logp = logp_p
                     ll_total = ll_total_p
-                    ll_vec = ll_vec_p
+                    ll_vec_full = ll_vec_full_p
+                    ll_vec_used = ll_vec_used_p
                     block_accepts[block_name] += 1
                     accepted_total += 1
 
@@ -654,7 +705,7 @@ def run_chain(theta0: np.ndarray, n_steps: int, rng: np.random.Generator,
         if t >= burn_in and ((t - burn_in) % thin == 0):
             samples.append(theta.copy())
             ll_totals.append(float(ll_total))
-            ll_components.append(ll_vec.copy())
+            ll_components.append(ll_vec_used.copy())
 
         if verbose and (t + 1) % 50_000 == 0:
             acc_rate = accepted_total / proposals_total if proposals_total else 0.0
@@ -676,6 +727,7 @@ def run_chain(theta0: np.ndarray, n_steps: int, rng: np.random.Generator,
 
 def run_multi_chain(config: ModelConfig, n_chains: int, n_steps: int, burn_in: int, thin: int,
                     sigma_qso: float, sigma_qso_dir: float, dir_like: str,
+                    drop_components: Optional[Set[str]] = None,
                     step_overrides: Optional[Dict[str, float]] = None,
                     base_seed: int = 42, verbose: bool = True,
                     tune_steps: bool = True
@@ -703,7 +755,7 @@ def run_multi_chain(config: ModelConfig, n_chains: int, n_steps: int, burn_in: i
 
         samples, ll_totals, ll_comps, acc, final_steps = run_chain(
             theta0, n_steps, rng, burn_in, thin, config,
-            sigma_qso, sigma_qso_dir, dir_like, step_overrides,
+            sigma_qso, sigma_qso_dir, dir_like, drop_components, step_overrides,
             chain_id=c, verbose=verbose, tune_steps=tune_steps
         )
 
@@ -1031,7 +1083,12 @@ def write_summary_json(
 # Single-model runner
 # -------------------------
 
-def run_single_model(config: ModelConfig, args: argparse.Namespace, verbose: bool = True) -> Dict[str, Any]:
+def run_single_model(
+    config: ModelConfig,
+    args: argparse.Namespace,
+    verbose: bool = True,
+    drop_components: Optional[Set[str]] = None,
+) -> Dict[str, Any]:
     all_steps = {
         "v_drift_kms": args.step_v_drift,
         "l_drift_deg": args.step_l_drift,
@@ -1061,6 +1118,7 @@ def run_single_model(config: ModelConfig, args: argparse.Namespace, verbose: boo
         sigma_qso=args.sigma_qso,
         sigma_qso_dir=args.sigma_qso_dir,
         dir_like=args.dir_like,
+        drop_components=drop_components,
         step_overrides=step_overrides,
         base_seed=args.seed,
         verbose=verbose,
@@ -1270,6 +1328,164 @@ def run_sigma_sweep(args: argparse.Namespace, verbose: bool = True) -> List[Dict
     return all_results
 
 # -------------------------
+# LOCO validation
+# -------------------------
+
+
+def summarize_array(arr: np.ndarray) -> Dict[str, float]:
+    finite = arr[np.isfinite(arr)]
+    if finite.size == 0:
+        return {"mean": float("nan"), "median": float("nan"), "q16": float("nan"), "q84": float("nan")}
+    q16, q50, q84 = np.percentile(finite, [16, 50, 84])
+    return {
+        "mean": float(np.mean(finite)),
+        "median": float(q50),
+        "q16": float(q16),
+        "q84": float(q84),
+    }
+
+
+def compute_holdout_observable(theta_full: np.ndarray, holdout: str, dir_like: str) -> float:
+    D_Q_vec, D_R_vec, _, _, _, D_kin_R = compute_model_vectors(theta_full)
+    D_Q_amp = float(np.linalg.norm(D_Q_vec))
+    D_R_amp = float(np.linalg.norm(D_R_vec))
+
+    if holdout == "wagenveld_wall_amp":
+        return float(theta_full[FULL_PARAM_NAMES.index("D_wall")])
+    if holdout == "wagenveld_wall_angle":
+        return float(theta_full[FULL_PARAM_NAMES.index("alpha_wall_deg")])
+    if holdout == "catwise_amp":
+        return D_Q_amp
+    if holdout == "catwise_dir":
+        if D_Q_amp < EPS_NORM:
+            return float("nan")
+        dhat_Q = D_Q_vec / D_Q_amp
+        if dir_like == "gaussian_angle":
+            return angle_deg(dhat_Q, n_QSO_obs)
+        return float(np.dot(dhat_Q, n_QSO_obs))
+    if holdout == "radio_ratio":
+        if D_kin_R < EPS_NORM:
+            return float("nan")
+        return D_R_amp / float(D_kin_R)
+    raise ValueError(f"Unknown holdout: {holdout}")
+
+
+def holdout_observed_value(holdout: str, dir_like: str, sigma_qso: float, sigma_qso_dir: float) -> Tuple[float, Optional[float], bool]:
+    if holdout == "wagenveld_wall_amp":
+        return D_WALL_MEAN, D_WALL_SIG, True
+    if holdout == "wagenveld_wall_angle":
+        return ANG_WALL_CMB_MEAN_DEG, ANG_WALL_CMB_SIG_DEG, True
+    if holdout == "catwise_amp":
+        return D_QSO_OBS, sigma_qso, True
+    if holdout == "catwise_dir":
+        if dir_like == "gaussian_angle":
+            return 0.0, sigma_qso_dir, True
+        return 1.0, None, False
+    if holdout == "radio_ratio":
+        return R_RADIO_MEAN, R_RADIO_SIG, True
+    raise ValueError(f"Unknown holdout: {holdout}")
+
+
+def evaluate_holdout(
+    samples_active: np.ndarray,
+    config: ModelConfig,
+    args: argparse.Namespace,
+    holdout: str,
+) -> Tuple[float, Dict[str, Any]]:
+    holdout_idx = LL_COMPONENT_NAMES.index(holdout)
+    ll_holdout: List[float] = []
+    observables: List[float] = []
+
+    for sample in samples_active:
+        _, ll_vec_full, _ = loglike_components(
+            sample, config, args.sigma_qso, args.sigma_qso_dir, args.dir_like, drop_components=None
+        )
+        ll_holdout.append(float(ll_vec_full[holdout_idx]))
+        theta_full = config.active_to_full_theta(sample)
+        observables.append(compute_holdout_observable(theta_full, holdout, args.dir_like))
+
+    holdout_arr = np.array(ll_holdout, dtype=float)
+    observables_arr = np.array(observables, dtype=float)
+    obs_val, obs_sig, is_gauss_scalar = holdout_observed_value(
+        holdout, args.dir_like, args.sigma_qso, args.sigma_qso_dir
+    )
+    pred_summary = summarize_array(observables_arr)
+
+    z_score: Optional[float] = None
+    if is_gauss_scalar and obs_sig and obs_sig > 0:
+        z_score = float((obs_val - pred_summary["mean"]) / obs_sig)
+
+    pred_summary.update({"observed": float(obs_val), "z_score": z_score})
+
+    holdout_score = float(log_mean_exp(holdout_arr)) if holdout_arr.size else -float("inf")
+    return holdout_score, pred_summary
+
+
+def run_loco(args: argparse.Namespace, verbose: bool = True) -> List[Dict[str, Any]]:
+    if args.holdout is None:
+        raise ValueError("--holdout is required when using --loco")
+
+    models = MODEL_MODES if args.compare_models else [args.model]
+    loco_results: List[Dict[str, Any]] = []
+
+    print(f"\nLOCO holdout={args.holdout} dir_like={args.dir_like}")
+
+    for mode in models:
+        print("\n" + "=" * 60)
+        print(f"LOCO training for model: {mode}")
+        print("=" * 60)
+        config = ModelConfig(mode)
+        result = run_single_model(config, args, verbose=verbose, drop_components={args.holdout})
+
+        combined = result["combined"]
+        holdout_score, pred_summary = evaluate_holdout(combined, config, args, args.holdout)
+
+        loco_results.append({
+            "heldout_name": args.holdout,
+            "model_mode": mode,
+            "heldout_log_mean_exp": float(holdout_score),
+            "train_log_mean_exp": float(result["loglike_scores"]["log_mean_exp"]),
+            "n_params": int(config.n_params),
+            "mean_acceptance": float(np.mean(result["acceptance_rates"])) if result["acceptance_rates"] else float("nan"),
+            "convergence": {
+                "max_rhat": float(np.nanmax(result["R_hat"])) if result["R_hat"].size else float("nan"),
+                "min_ess": float(np.nanmin(result["ess"])) if result["ess"].size else float("nan"),
+            },
+            "posterior_predictive": pred_summary,
+        })
+
+    ranked = sorted(loco_results, key=lambda r: r["heldout_log_mean_exp"], reverse=True)
+    best = ranked[0]
+
+    print("\n" + "=" * 70)
+    print("LOCO results (ranked by held-out log_mean_exp)")
+    print("=" * 70)
+    print(f"{'Model':<15} {'heldout_log_mean_exp':>20} {'Δ':>10} {'n_par':>8} {'max_rhat':>10} {'min_ess':>10}")
+    for r in ranked:
+        delta = r["heldout_log_mean_exp"] - best["heldout_log_mean_exp"]
+        delta_str = f"{delta:+.2f}" if delta < 0 else "(best)"
+        conv = r["convergence"]
+        print(
+            f"{r['model_mode']:<15} {r['heldout_log_mean_exp']:>20.4f} {delta_str:>10} {r['n_params']:>8d} "
+            f"{conv['max_rhat']:>10.3f} {conv['min_ess']:>10.1f}"
+        )
+
+    best_pred = best["posterior_predictive"]
+    print("\nBest model posterior predictive for held-out observable:")
+    print(
+        f"  mean={best_pred['mean']:.4f}, median={best_pred['median']:.4f}, "
+        f"[16,84]=[{best_pred['q16']:.4f},{best_pred['q84']:.4f}], observed={best_pred['observed']:.4f}"
+    )
+    if best_pred.get("z_score") is not None:
+        print(f"  z-score (observed vs posterior mean): {best_pred['z_score']:.3f}")
+
+    with open("loco_results.json", "w", encoding="utf-8") as f:
+        json.dump(loco_results, f, indent=2)
+
+    print("\nSaved LOCO summary to loco_results.json")
+    return loco_results
+
+# -------------------------
 # CLI
 # -------------------------
 
@@ -1280,6 +1496,9 @@ def parse_args() -> argparse.Namespace:
                         help="Model mode (default: full)")
     parser.add_argument("--compare-models", action="store_true",
                         help="Run all models and compare loglike-based scores")
+    parser.add_argument("--loco", action="store_true", help="Run leave-one-constraint-out validation")
+    parser.add_argument("--holdout", type=str, choices=HOLDOUT_CHOICES, default=None,
+                        help="Likelihood component to hold out during LOCO")
     parser.add_argument("--dir-like", type=str, default="gaussian_angle", choices=DIR_LIKE_CHOICES,
                         help="Directional likelihood: Gaussian on angle or von Mises-Fisher")
     parser.add_argument("--sweep-sigma-dir", type=lambda s: [float(x) for x in s.split(",") if x.strip()], default=None,
@@ -1312,8 +1531,7 @@ def parse_args() -> argparse.Namespace:
 
 def warn_small_sigma(dir_like: str, sigma_dir_deg: float) -> None:
     if dir_like == "vmf" and sigma_dir_deg < 0.5:
-        sigma_rad = math.radians(sigma_dir_deg)
-        kappa = float("inf") if sigma_rad <= 0.0 else 1.0 / (sigma_rad * sigma_rad)
+        kappa = convert_sigma_dir_to_kappa(sigma_dir_deg)
         print(
             f"WARNING: dir_like=vmf with sigma_dir_deg={sigma_dir_deg:.3f} implies kappa≈{kappa:.2e}; "
             "ensure this is intended."
@@ -1331,6 +1549,10 @@ def main() -> None:
 
     if args.sweep_sigma_dir:
         run_sigma_sweep(args, verbose=verbose)
+        return
+
+    if args.loco:
+        run_loco(args, verbose=verbose)
         return
 
     if args.compare_models:
