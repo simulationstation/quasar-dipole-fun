@@ -122,6 +122,8 @@ A_MAX       = 50.0
 EPS_SIN  = 1e-12
 EPS_NORM = 1e-15
 
+DIR_LIKE_CHOICES = ["gaussian_angle", "vmf"]
+
 # Model modes
 MODEL_MODES = ["full", "wall_only", "drift_only", "cmb_only"]
 
@@ -268,6 +270,12 @@ def log_mean_exp(arr: np.ndarray) -> float:
     if n <= 0:
         return -float("inf")
     return log_sum_exp(arr) - math.log(n)
+
+def log_sinh_stable(x: float) -> float:
+    """Stable log(sinh(x)) for large x."""
+    if x > 50.0:
+        return float(x - math.log(2.0))
+    return float(math.log(math.sinh(x)))
 
 # -------------------------
 # Precompute fixed quantities
@@ -431,7 +439,7 @@ def log_prior(theta_active: np.ndarray, config: ModelConfig) -> float:
     return float(lp)
 
 def loglike_components(theta_active: np.ndarray, config: ModelConfig,
-                       sigma_qso: float, sigma_qso_dir: float) -> Tuple[float, np.ndarray]:
+                       sigma_qso: float, sigma_qso_dir: float, dir_like: str) -> Tuple[float, np.ndarray]:
     """
     Component-wise log-likelihood vector (length 5) + total.
 
@@ -466,7 +474,21 @@ def loglike_components(theta_active: np.ndarray, config: ModelConfig,
     ang = angle_deg(dhat_Q, n_QSO_obs)
     if np.isnan(ang):
         return -np.inf, np.full(N_LL_COMPONENTS, -np.inf, dtype=float)
-    ll_vec[3] = log_gauss(float(ang), 0.0, sigma_qso_dir)
+
+    if dir_like == "gaussian_angle":
+        ll_vec[3] = log_gauss(float(ang), 0.0, sigma_qso_dir)
+    elif dir_like == "vmf":
+        sigma_rad = math.radians(sigma_qso_dir)
+        if sigma_rad <= 0.0:
+            return -np.inf, np.full(N_LL_COMPONENTS, -np.inf, dtype=float)
+        # small-angle approximation: kappa ≈ 1/sigma^2
+        kappa = 1.0 / (sigma_rad * sigma_rad)
+        dot = float(np.dot(dhat_Q, n_QSO_obs))
+        dot = max(-1.0, min(1.0, dot))
+        logC = math.log(kappa) - math.log(4.0 * math.pi) - log_sinh_stable(kappa)
+        ll_vec[3] = kappa * dot - logC
+    else:
+        return -np.inf, np.full(N_LL_COMPONENTS, -np.inf, dtype=float)
 
     # 4) Radio ratio
     if D_kin_R < EPS_NORM:
@@ -480,11 +502,11 @@ def loglike_components(theta_active: np.ndarray, config: ModelConfig,
     return ll_total, ll_vec
 
 def log_posterior(theta_active: np.ndarray, config: ModelConfig,
-                  sigma_qso: float, sigma_qso_dir: float) -> float:
+                  sigma_qso: float, sigma_qso_dir: float, dir_like: str) -> float:
     lp = log_prior(theta_active, config)
     if not np.isfinite(lp):
         return -np.inf
-    ll_total, _ = loglike_components(theta_active, config, sigma_qso, sigma_qso_dir)
+    ll_total, _ = loglike_components(theta_active, config, sigma_qso, sigma_qso_dir, dir_like)
     if not np.isfinite(ll_total):
         return -np.inf
     return float(lp + ll_total)
@@ -537,7 +559,7 @@ def propose(theta_active: np.ndarray, rng: np.random.Generator, config: ModelCon
 
 def run_chain(theta0: np.ndarray, n_steps: int, rng: np.random.Generator,
               burn_in: int, thin: int, config: ModelConfig,
-              sigma_qso: float, sigma_qso_dir: float,
+              sigma_qso: float, sigma_qso_dir: float, dir_like: str,
               step_overrides: Optional[Dict[str, float]] = None,
               chain_id: int = 0, verbose: bool = True) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
     """
@@ -550,7 +572,7 @@ def run_chain(theta0: np.ndarray, n_steps: int, rng: np.random.Generator,
       acceptance_rate  float
     """
     theta = theta0.copy()
-    ll_total, ll_vec = loglike_components(theta, config, sigma_qso, sigma_qso_dir)
+    ll_total, ll_vec = loglike_components(theta, config, sigma_qso, sigma_qso_dir, dir_like)
     lp = log_prior(theta, config)
     logp = lp + ll_total
 
@@ -564,7 +586,7 @@ def run_chain(theta0: np.ndarray, n_steps: int, rng: np.random.Generator,
 
     for t in range(int(n_steps)):
         th_prop = propose(theta, rng, config, step_overrides)
-        ll_total_p, ll_vec_p = loglike_components(th_prop, config, sigma_qso, sigma_qso_dir)
+        ll_total_p, ll_vec_p = loglike_components(th_prop, config, sigma_qso, sigma_qso_dir, dir_like)
         lp_p = log_prior(th_prop, config)
         logp_p = lp_p + ll_total_p
 
@@ -589,7 +611,7 @@ def run_chain(theta0: np.ndarray, n_steps: int, rng: np.random.Generator,
     return np.array(samples, dtype=float), np.array(ll_totals, dtype=float), np.array(ll_components, dtype=float), float(accepted / n_steps)
 
 def run_multi_chain(config: ModelConfig, n_chains: int, n_steps: int, burn_in: int, thin: int,
-                    sigma_qso: float, sigma_qso_dir: float,
+                    sigma_qso: float, sigma_qso_dir: float, dir_like: str,
                     step_overrides: Optional[Dict[str, float]] = None,
                     base_seed: int = 42, verbose: bool = True
                     ) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray], List[float]]:
@@ -615,7 +637,7 @@ def run_multi_chain(config: ModelConfig, n_chains: int, n_steps: int, burn_in: i
 
         samples, ll_totals, ll_comps, acc = run_chain(
             theta0, n_steps, rng, burn_in, thin, config,
-            sigma_qso, sigma_qso_dir, step_overrides,
+            sigma_qso, sigma_qso_dir, dir_like, step_overrides,
             chain_id=c, verbose=verbose
         )
 
@@ -883,6 +905,7 @@ def write_summary_json(
     rhat: np.ndarray,
     ess: np.ndarray,
     config: ModelConfig,
+    dir_like: str,
     waic_total: Tuple[float, float, float],
     waic_breakdown: Dict[str, Dict[str, float]],
     ll_comp_stats: Dict[str, Dict[str, float]],
@@ -901,6 +924,7 @@ def write_summary_json(
 
     summary: Dict[str, Any] = {
         "model_mode": config.mode,
+        "dir_like": dir_like,
         "active_parameters": config.active_params,
         "fixed_parameters": config.fixed_params,
         "n_chains": len(chains),
@@ -951,6 +975,7 @@ def run_single_model(config: ModelConfig, args: argparse.Namespace, verbose: boo
         print(f"Model: {config.mode}")
         print(f"Active parameters: {config.active_params}")
         print(f"Fixed: {config.fixed_params}")
+        print(f"Directional likelihood: {args.dir_like} (sigma_dir_deg={args.sigma_qso_dir})")
         print("=" * 60)
 
     chains, ll_totals_list, ll_components_list, acceptance_rates = run_multi_chain(
@@ -961,6 +986,7 @@ def run_single_model(config: ModelConfig, args: argparse.Namespace, verbose: boo
         thin=args.thin,
         sigma_qso=args.sigma_qso,
         sigma_qso_dir=args.sigma_qso_dir,
+        dir_like=args.dir_like,
         step_overrides=step_overrides,
         base_seed=args.seed,
         verbose=verbose,
@@ -1057,6 +1083,7 @@ def run_model_comparison(args: argparse.Namespace, verbose: bool = True) -> List
             rhat=result["R_hat"],
             ess=result["ess"],
             config=result["config"],
+            dir_like=cargs.dir_like,
             waic_total=result["waic_total"],
             waic_breakdown=result["waic_breakdown"],
             ll_comp_stats=result["ll_comp_stats"],
@@ -1113,6 +1140,65 @@ def run_model_comparison(args: argparse.Namespace, verbose: bool = True) -> List
 
     return results
 
+
+def run_sigma_sweep(args: argparse.Namespace, verbose: bool = True) -> List[Dict[str, Any]]:
+    sweep_sigmas = args.sweep_sigma_dir or []
+    all_results: List[Dict[str, Any]] = []
+    table_rows: List[Tuple[float, str, float, Optional[float]]] = []
+
+    for sigma in sweep_sigmas:
+        warn_small_sigma(args.dir_like, float(sigma))
+        sweep_args = argparse.Namespace(**vars(args))
+        sweep_args.sigma_qso_dir = float(sigma)
+        sweep_args.compare_models = True
+
+        if verbose:
+            print("\n" + "=" * 70)
+            print(f"Sigma sweep run: sigma_qso_dir={sigma}")
+            print("=" * 70)
+
+        res = run_model_comparison(sweep_args, verbose=verbose)
+        ranked = sorted(res, key=lambda r: r["waic_total"][2])
+        best_model = ranked[0]["config"].mode
+        best_waic = ranked[0]["waic_total"][2]
+        second_best_delta: Optional[float] = None
+        if len(ranked) > 1:
+            second_best_delta = ranked[1]["waic_total"][2] - best_waic
+
+        per_model: List[Dict[str, Any]] = []
+        for r in ranked:
+            lppd, p_waic, waic = r["waic_total"]
+            per_model.append({
+                "model": r["config"].mode,
+                "waic": float(waic),
+                "delta_waic": float(waic - best_waic),
+                "lppd": float(lppd),
+                "p_waic": float(p_waic),
+            })
+
+        all_results.append({
+            "sigma_qso_dir": float(sigma),
+            "dir_like": args.dir_like,
+            "per_model": per_model,
+            "best_model": best_model,
+            "best_waic": float(best_waic),
+        })
+        table_rows.append((float(sigma), best_model, float(best_waic), second_best_delta))
+
+    with open("sweep_results.json", "w", encoding="utf-8") as f:
+        json.dump(all_results, f, indent=2)
+
+    if verbose and table_rows:
+        print("\n" + "=" * 50)
+        print("Sigma sweep summary (best models)")
+        print("=" * 50)
+        print(f"{'sigma_dir':>10} {'best':>10} {'WAIC':>10} {'ΔWAIC2':>10}")
+        for sigma, best, waic, delta2 in table_rows:
+            delta_str = "-" if delta2 is None else f"{delta2:+.2f}"
+            print(f"{sigma:10.3f} {best:>10} {waic:10.2f} {delta_str:>10}")
+
+    return all_results
+
 # -------------------------
 # CLI
 # -------------------------
@@ -1124,6 +1210,10 @@ def parse_args() -> argparse.Namespace:
                         help="Model mode (default: full)")
     parser.add_argument("--compare-models", action="store_true",
                         help="Run all models and compare WAIC")
+    parser.add_argument("--dir-like", type=str, default="gaussian_angle", choices=DIR_LIKE_CHOICES,
+                        help="Directional likelihood: Gaussian on angle or von Mises-Fisher")
+    parser.add_argument("--sweep-sigma-dir", type=lambda s: [float(x) for x in s.split(",") if x.strip()], default=None,
+                        help="Comma-separated list of sigma_dir_deg values; runs model comparison for each")
 
     parser.add_argument("--n-steps", type=int, default=N_STEPS)
     parser.add_argument("--burn-in", type=int, default=BURN_IN)
@@ -1146,6 +1236,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--quiet", action="store_true")
     return parser.parse_args()
 
+
+def warn_small_sigma(dir_like: str, sigma_dir_deg: float) -> None:
+    if dir_like == "vmf" and sigma_dir_deg < 0.5:
+        sigma_rad = math.radians(sigma_dir_deg)
+        kappa = float("inf") if sigma_rad <= 0.0 else 1.0 / (sigma_rad * sigma_rad)
+        print(
+            f"WARNING: dir_like=vmf with sigma_dir_deg={sigma_dir_deg:.3f} implies kappa≈{kappa:.2e}; "
+            "ensure this is intended."
+        )
+
 # -------------------------
 # Main
 # -------------------------
@@ -1153,6 +1253,12 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     verbose = not args.quiet
+
+    warn_small_sigma(args.dir_like, args.sigma_qso_dir)
+
+    if args.sweep_sigma_dir:
+        run_sigma_sweep(args, verbose=verbose)
+        return
 
     if args.compare_models:
         results = run_model_comparison(args, verbose=verbose)
@@ -1165,6 +1271,8 @@ def main() -> None:
             lppd, p_waic, waic = r["waic_total"]
             out.append({
                 "model": r["config"].mode,
+                "dir_like": args.dir_like,
+                "sigma_qso_dir": float(args.sigma_qso_dir),
                 "waic": float(waic),
                 "lppd": float(lppd),
                 "p_waic": float(p_waic),
@@ -1272,6 +1380,7 @@ def main() -> None:
         rhat=rhat,
         ess=ess,
         config=config,
+        dir_like=args.dir_like,
         waic_total=waic_total,
         waic_breakdown=waic_breakdown,
         ll_comp_stats=ll_comp_stats,
