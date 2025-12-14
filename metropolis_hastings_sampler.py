@@ -89,6 +89,9 @@ R_RADIO_SIG  = 0.49
 SIGMA_QSO = 0.0010
 SIGMA_QSO_DIR_DEG = 10.0
 
+# Constraints metadata (populated when --constraints is provided)
+CONSTRAINTS_INFO: Dict[str, Any] = {}
+
 N_STEPS   = 250_000
 BURN_IN   = 50_000
 THIN      = 20
@@ -298,6 +301,48 @@ def convert_sigma_dir_to_kappa(sigma_dir_deg: float) -> float:
         return float("inf")
     kappa = 2.0 / (sigma_rad * sigma_rad)
     return min(kappa, 1e6)
+
+
+def apply_constraints_from_file(path: str) -> Dict[str, Any]:
+    """Load constraint overrides from a JSON file.
+
+    Expected format (matches reproduce_catwise_dipole.py output)::
+
+        {
+          "catwise": {
+            "D_QSO_OBS": ...,
+            "L_QSO_OBS_DEG": ...,
+            "B_QSO_OBS_DEG": ...,
+            "SIGMA_QSO": ...,
+            "SIGMA_QSO_DIR_DEG": ...
+          }
+        }
+    """
+
+    global D_QSO_OBS, L_QSO_OBS_DEG, B_QSO_OBS_DEG, SIGMA_QSO, SIGMA_QSO_DIR_DEG, n_QSO_obs, CONSTRAINTS_INFO
+
+    with open(path, "r", encoding="utf-8") as f:
+        payload = json.load(f)
+
+    cat = payload.get("catwise", payload)
+    used: Dict[str, Any] = {}
+
+    mapping = {
+        "D_QSO_OBS": "D_QSO_OBS",
+        "L_QSO_OBS_DEG": "L_QSO_OBS_DEG",
+        "B_QSO_OBS_DEG": "B_QSO_OBS_DEG",
+        "SIGMA_QSO": "SIGMA_QSO",
+        "SIGMA_QSO_DIR_DEG": "SIGMA_QSO_DIR_DEG",
+    }
+
+    for src, dst in mapping.items():
+        if src in cat and cat[src] is not None:
+            globals()[dst] = float(cat[src])
+            used[dst] = float(cat[src])
+
+    n_QSO_obs = lb_to_unitvec(L_QSO_OBS_DEG, B_QSO_OBS_DEG)
+    CONSTRAINTS_INFO = {"source": str(path), "values": used}
+    return CONSTRAINTS_INFO
 
 # -------------------------
 # Precompute fixed quantities
@@ -1037,6 +1082,7 @@ def write_summary_json(
     ll_comp_stats: Dict[str, Dict[str, float]],
     final_step_sizes: Dict[str, float],
     filename: str,
+    constraints_info: Optional[Dict[str, Any]] = None,
 ) -> None:
     combined = np.vstack(chains)
     combined_ll = np.concatenate(ll_totals_list)
@@ -1074,6 +1120,7 @@ def write_summary_json(
             "ESS": {name: (float(ess[i]) if np.isfinite(ess[i]) else None)
                     for i, name in enumerate(config.active_params)},
         },
+        "constraints": constraints_info or CONSTRAINTS_INFO,
     }
 
     with open(filename, "w", encoding="utf-8") as f:
@@ -1231,6 +1278,7 @@ def run_model_comparison(args: argparse.Namespace, verbose: bool = True) -> List
             ll_comp_stats=result["ll_comp_stats"],
             final_step_sizes=result["final_steps"],
             filename=summary_file,
+            constraints_info=CONSTRAINTS_INFO,
         )
 
         if verbose:
@@ -1513,6 +1561,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sigma-qso", type=float, default=SIGMA_QSO)
     parser.add_argument("--sigma-qso-dir", type=float, default=SIGMA_QSO_DIR_DEG)
 
+    parser.add_argument(
+        "--constraints",
+        type=str,
+        default=None,
+        help="Optional JSON file with constraint overrides (from reproduce_catwise_dipole.py)",
+    )
+
     parser.add_argument("--step-v-drift", type=float, default=STEP_V_DRIFT)
     parser.add_argument("--step-l-drift", type=float, default=STEP_L_DRIFT)
     parser.add_argument("--step-b-drift", type=float, default=STEP_B_DRIFT)
@@ -1545,7 +1600,28 @@ def main() -> None:
     args = parse_args()
     verbose = not args.quiet
 
+    constraints_info: Optional[Dict[str, Any]] = None
+    if args.constraints:
+        constraints_info = apply_constraints_from_file(args.constraints)
+        if verbose:
+            print("Loaded constraint overrides:")
+            for k, v in constraints_info.get("values", {}).items():
+                print(f"  {k} = {v}")
+
+        if "SIGMA_QSO" in constraints_info.get("values", {}):
+            args.sigma_qso = float(constraints_info["values"]["SIGMA_QSO"])
+        if "SIGMA_QSO_DIR_DEG" in constraints_info.get("values", {}):
+            args.sigma_qso_dir = float(constraints_info["values"]["SIGMA_QSO_DIR_DEG"])
+
     warn_small_sigma(args.dir_like, args.sigma_qso_dir)
+
+    if verbose:
+        print("Using CatWISE constraints:")
+        print(f"  D_QSO_OBS       = {D_QSO_OBS}")
+        print(f"  L_QSO_OBS_DEG   = {L_QSO_OBS_DEG}")
+        print(f"  B_QSO_OBS_DEG   = {B_QSO_OBS_DEG}")
+        print(f"  SIGMA_QSO       = {args.sigma_qso}")
+        print(f"  SIGMA_QSO_DIR   = {args.sigma_qso_dir}")
 
     if args.sweep_sigma_dir:
         run_sigma_sweep(args, verbose=verbose)
@@ -1678,6 +1754,7 @@ def main() -> None:
         ll_comp_stats=ll_comp_stats,
         final_step_sizes=result["final_steps"],
         filename=SUMMARY_JSON,
+        constraints_info=CONSTRAINTS_INFO,
     )
     if verbose:
         print(f"  Wrote summary to: {SUMMARY_JSON}")
