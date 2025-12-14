@@ -1037,7 +1037,39 @@ def run_model_comparison(args: argparse.Namespace, verbose: bool = True) -> List
         print(f"Running model: {mode}")
         print("=" * 60)
         config = ModelConfig(mode)
-        results.append(run_single_model(config, cargs, verbose=verbose))
+        result = run_single_model(config, cargs, verbose=verbose)
+
+        samples_file = f"posterior_samples_{mode}.csv"
+        summary_file = f"posterior_summary_{mode}.json"
+
+        write_samples_csv(
+            chains=result["chains"],
+            ll_totals_list=result["ll_totals_list"],
+            ll_components_list=result["ll_components_list"],
+            config=result["config"],
+            filename=samples_file,
+        )
+        write_summary_json(
+            chains=result["chains"],
+            ll_totals_list=result["ll_totals_list"],
+            ll_components_list=result["ll_components_list"],
+            acceptance_rates=result["acceptance_rates"],
+            rhat=result["R_hat"],
+            ess=result["ess"],
+            config=result["config"],
+            waic_total=result["waic_total"],
+            waic_breakdown=result["waic_breakdown"],
+            ll_comp_stats=result["ll_comp_stats"],
+            filename=summary_file,
+        )
+
+        if verbose:
+            print(f"  Saved samples to: {samples_file}")
+            print(f"  Saved summary to: {summary_file}")
+
+        result["samples_csv"] = samples_file
+        result["summary_json"] = summary_file
+        results.append(result)
 
     # Ranked by WAIC
     ranked = sorted(results, key=lambda r: r["waic_total"][2])
@@ -1140,6 +1172,8 @@ def main() -> None:
                 "active_params": r["config"].active_params,
                 "mean_acceptance": float(np.mean(r["acceptance_rates"])),
                 "waic_components": r["waic_breakdown"],
+                "samples_csv": r.get("samples_csv", f"posterior_samples_{r['config'].mode}.csv"),
+                "summary_json": r.get("summary_json", f"posterior_summary_{r['config'].mode}.json"),
             })
 
         with open(comparison_file, "w", encoding="utf-8") as f:
