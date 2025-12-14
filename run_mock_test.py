@@ -51,7 +51,7 @@ def main() -> None:
             "--output",
             str(catalog),
             "--n",
-            "80000",
+            "1000000",
             "--dipole",
             str(true_D),
             "--l-dipole",

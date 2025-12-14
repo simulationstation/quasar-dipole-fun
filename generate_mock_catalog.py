@@ -85,21 +85,33 @@ def sample_dipolar_sky(
 
 
 def estimate_dipole_from_radec(ra_deg: np.ndarray, dec_deg: np.ndarray) -> Tuple[float, float, float]:
+    """Estimate dipole in Galactic frame from ICRS RA/Dec."""
     coord_icrs = SkyCoord(ra=np.asarray(ra_deg) * u.deg, dec=np.asarray(dec_deg) * u.deg, frame="icrs")
-    cart = coord_icrs.cartesian
-    sum_vec = np.array([cart.x.sum().value, cart.y.sum().value, cart.z.sum().value])
+    coord_gal = coord_icrs.galactic
+
+    # Sum unit vectors in Galactic Cartesian
+    l_rad = np.radians(coord_gal.l.deg)
+    b_rad = np.radians(coord_gal.b.deg)
+    cos_b = np.cos(b_rad)
+
+    x = cos_b * np.cos(l_rad)
+    y = cos_b * np.sin(l_rad)
+    z = np.sin(b_rad)
+
+    sum_vec = np.array([x.sum(), y.sum(), z.sum()])
     n = len(ra_deg)
     amplitude = float(3.0 * np.linalg.norm(sum_vec) / n) if n > 0 else float("nan")
 
-    recovered_icrs = SkyCoord(x=sum_vec[0] * u.one, y=sum_vec[1] * u.one, z=sum_vec[2] * u.one, frame="icrs", representation_type="cartesian")
-    recovered_gal = recovered_icrs.galactic
-    return amplitude, float(recovered_gal.l.deg), float(recovered_gal.b.deg)
+    # Convert sum vector to (l, b)
+    l_rec = math.degrees(math.atan2(sum_vec[1], sum_vec[0])) % 360.0
+    b_rec = math.degrees(math.atan2(sum_vec[2], math.hypot(sum_vec[0], sum_vec[1])))
+    return amplitude, l_rec, b_rec
 
 
 def run_self_check() -> None:
     print("Running self-check with a synthetic catalog...")
 
-    n = 200_000
+    n = 1_500_000  # Need large N for weak dipole D=0.02 to beat statistical noise
     D_true = 0.02
     l_true = 264.0
     b_true = 48.0
@@ -109,6 +121,20 @@ def run_self_check() -> None:
 
     l_samples, b_samples = sample_dipolar_sky(n, D_true, l_true, b_true, rng)
     ra_samples, dec_samples = galactic_lb_to_icrs_radec(l_samples, b_samples)
+
+    print(f"[MOCK] Generated N = {len(ra_samples)}")
+
+    # Diagnostic A: Mean-vector sanity check (NO mask) in Galactic frame
+    l_rad = np.radians(l_samples)
+    b_rad = np.radians(b_samples)
+    cos_b = np.cos(b_rad)
+    vecs = np.column_stack([cos_b * np.cos(l_rad), cos_b * np.sin(l_rad), np.sin(b_rad)])
+    m = np.mean(vecs, axis=0)
+    m /= np.linalg.norm(m)
+    true_vec = lb_to_unitvec(l_true, b_true)
+    dot = float(np.clip(np.dot(m, true_vec), -1.0, 1.0))
+    sanity_sep = math.degrees(math.acos(dot))
+    print(f"[MOCK-SANITY] Mean-vector separation (no mask): {sanity_sep:.2f} deg")
 
     D_rec, l_rec, b_rec = estimate_dipole_from_radec(ra_samples, dec_samples)
 
