@@ -1,0 +1,170 @@
+[
+  {
+    "model": "wall_only",
+    "waic": 10.332311665797771,
+    "lppd": -2.071092941276663,
+    "p_waic": 3.0950628916222227,
+    "n_params": 5,
+    "active_params": [
+      "D_wall",
+      "alpha_wall_deg",
+      "phi_wall_deg",
+      "A_Q",
+      "A_R"
+    ],
+    "mean_acceptance": 0.5466500000000001,
+    "waic_components": {
+      "wagenveld_wall_amp": {
+        "lppd": -0.32892856499551293,
+        "p_waic": 0.6104685988946681,
+        "waic": 1.878794327780362
+      },
+      "wagenveld_wall_angle": {
+        "lppd": -0.3593993321277571,
+        "p_waic": 0.5375965656860903,
+        "waic": 1.7939917956276947
+      },
+      "catwise_amp": {
+        "lppd": -0.36501167957401925,
+        "p_waic": 0.5778587860742356,
+        "waic": 1.8857409312965097
+      },
+      "catwise_dir": {
+        "lppd": -0.610110703075545,
+        "p_waic": 0.501633625310869,
+        "waic": 2.223488656772828
+      },
+      "radio_ratio": {
+        "lppd": -0.40764266150382866,
+        "p_waic": 0.8675053156563599,
+        "waic": 2.550295954320377
+      }
+    }
+  },
+  {
+    "model": "full",
+    "waic": 11.401794063268714,
+    "lppd": -2.1983597755723014,
+    "p_waic": 3.5025372560620553,
+    "n_params": 8,
+    "active_params": [
+      "v_drift_kms",
+      "l_drift_deg",
+      "b_drift_deg",
+      "D_wall",
+      "alpha_wall_deg",
+      "phi_wall_deg",
+      "A_Q",
+      "A_R"
+    ],
+    "mean_acceptance": 0.36712500000000003,
+    "waic_components": {
+      "wagenveld_wall_amp": {
+        "lppd": -0.377414179813079,
+        "p_waic": 0.8383673438224095,
+        "waic": 2.431563047270977
+      },
+      "wagenveld_wall_angle": {
+        "lppd": -0.36888189194775034,
+        "p_waic": 0.5052585984304792,
+        "waic": 1.748280980756459
+      },
+      "catwise_amp": {
+        "lppd": -0.3566376427210516,
+        "p_waic": 0.5376007227274195,
+        "waic": 1.7884767308969423
+      },
+      "catwise_dir": {
+        "lppd": -0.6689301219988462,
+        "p_waic": 0.9531476540725907,
+        "waic": 3.2441555521428738
+      },
+      "radio_ratio": {
+        "lppd": -0.42649593909157435,
+        "p_waic": 0.6681629370091563,
+        "waic": 2.189317752201461
+      }
+    }
+  },
+  {
+    "model": "drift_only",
+    "waic": 35.25584834966105,
+    "lppd": -15.92799772862314,
+    "p_waic": 1.6999264462073835,
+    "n_params": 5,
+    "active_params": [
+      "v_drift_kms",
+      "l_drift_deg",
+      "b_drift_deg",
+      "A_Q",
+      "A_R"
+    ],
+    "mean_acceptance": 0.54045,
+    "waic_components": {
+      "wagenveld_wall_amp": {
+        "lppd": 0.0,
+        "p_waic": 0.0,
+        "waic": -0.0
+      },
+      "wagenveld_wall_angle": {
+        "lppd": 0.0,
+        "p_waic": 0.0,
+        "waic": -0.0
+      },
+      "catwise_amp": {
+        "lppd": -0.35807247246915086,
+        "p_waic": 0.4932705960173974,
+        "waic": 1.7026861369730966
+      },
+      "catwise_dir": {
+        "lppd": -0.7242359600273733,
+        "p_waic": 1.2066558501899862,
+        "waic": 3.861783620434719
+      },
+      "radio_ratio": {
+        "lppd": -14.845689296126615,
+        "p_waic": 1.2634396258019724e-29,
+        "waic": 29.69137859225323
+      }
+    }
+  },
+  {
+    "model": "cmb_only",
+    "waic": 39.1540020883297,
+    "lppd": -19.059737798485244,
+    "p_waic": 0.517263245679606,
+    "n_params": 2,
+    "active_params": [
+      "A_Q",
+      "A_R"
+    ],
+    "mean_acceptance": 0.808025,
+    "waic_components": {
+      "wagenveld_wall_amp": {
+        "lppd": 0.0,
+        "p_waic": 0.0,
+        "waic": -0.0
+      },
+      "wagenveld_wall_angle": {
+        "lppd": 0.0,
+        "p_waic": 0.0,
+        "waic": -0.0
+      },
+      "catwise_amp": {
+        "lppd": -0.3525354012539603,
+        "p_waic": 0.517263245679606,
+        "waic": 1.7395972938671327
+      },
+      "catwise_dir": {
+        "lppd": -3.861513101104671,
+        "p_waic": 1.507907620329964e-30,
+        "waic": 7.723026202209342
+      },
+      "radio_ratio": {
+        "lppd": -14.845689296126615,
+        "p_waic": 1.262177448353619e-29,
+        "waic": 29.69137859225323
+      }
+    }
+  }
+]
