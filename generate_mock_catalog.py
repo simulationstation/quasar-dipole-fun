@@ -14,7 +14,7 @@ from typing import Tuple
 import numpy as np
 
 try:
-    from astropy.coordinates import SkyCoord
+    from astropy.coordinates import CartesianRepresentation, SkyCoord
     import astropy.units as u
 except ImportError as exc:  # pragma: no cover - dependency guard
     raise SystemExit(
@@ -33,9 +33,23 @@ def lb_to_unitvec(l_deg: float, b_deg: float) -> np.ndarray:
 
 
 def unitvec_to_radec(vec: np.ndarray) -> Tuple[float, float]:
-    x, y, z = vec
-    coord = SkyCoord(x=x, y=y, z=z, representation_type="cartesian").icrs
-    return float(coord.ra.deg), float(coord.dec.deg)
+    """Convert a 3D Cartesian vector to ICRS (RA, Dec) in degrees.
+
+    The input can be any finite non-zero vector; it will be normalized before
+    conversion. RA is wrapped to [0, 360) degrees.
+    """
+
+    v = np.asarray(vec, dtype=float).reshape(3,)
+    norm = np.linalg.norm(v)
+    if not np.isfinite(norm) or norm <= 0:
+        raise ValueError("vec must be a finite non-zero 3-vector")
+
+    v = v / norm
+    rep = CartesianRepresentation(*(v * u.one))
+    coord = SkyCoord(rep, frame="icrs")
+    ra = coord.spherical.lon.to_value(u.deg) % 360.0
+    dec = coord.spherical.lat.to_value(u.deg)
+    return float(ra), float(dec)
 
 
 def sample_dipolar_sky(n: int, D_true: float, l_dipole: float, b_dipole: float, rng: np.random.Generator) -> np.ndarray:
