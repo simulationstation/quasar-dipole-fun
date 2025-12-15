@@ -1,0 +1,8 @@
+{
+  "method": "published_values",
+  "explanation": "Secrest+22 NVSS removal uses HEALPix-based homogenization that requires their full pipeline code and intermediate data products (wise_masked.fits, nvss_masked.fits). We use their published post-correction values directly.",
+  "published_amplitude_after_nvss": 0.0154,
+  "published_N_after_nvss": 1355352,
+  "our_baseline_N": 1401166,
+  "fraction_removed_approx": 0.03269705373952836
+}

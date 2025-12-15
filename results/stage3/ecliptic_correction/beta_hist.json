@@ -1,0 +1,5 @@
+{
+  "method": "published_values",
+  "explanation": "Secrest+22 ecliptic correction uses a linear fit of pixel-level counts vs |ecliptic latitude|, applied as density weights. This requires their HEALPix pipeline. We use their published post-correction values directly.",
+  "secrest_correction_factor": "w = 1 - p0 * |\u03b2|/count where p0 is fitted"
+}

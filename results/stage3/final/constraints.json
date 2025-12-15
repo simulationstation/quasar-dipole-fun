@@ -1,0 +1,38 @@
+{
+  "catwise_dipole": {
+    "amplitude": 0.0154,
+    "amplitude_sigma": 0.0015,
+    "l_deg": 238.2,
+    "b_deg": 28.8,
+    "direction_sigma_deg": 8.0,
+    "N_sources": 1355352
+  },
+  "derived_sigma_qso": 0.0015,
+  "derived_sigma_qso_dir_deg": 8.0,
+  "validation": {
+    "our_baseline_amplitude": 0.020985290289844055,
+    "our_baseline_l_deg": 236.01115215597173,
+    "our_baseline_b_deg": 28.774371321733305,
+    "our_bootstrap_dir_sigma_deg": 5.4655045768310755,
+    "separation_from_published_deg": 1.9184818846094198,
+    "validation_passed": true
+  },
+  "source": {
+    "catalog": "data/secrest/catwise_agns.fits",
+    "cuts": {
+      "b_cut": 30.0,
+      "w1cov_min": 80.0,
+      "w1_max": 16.4
+    },
+    "corrections": {
+      "nvss_removal": "published",
+      "ecliptic_correction": "published"
+    },
+    "reference": "Secrest et al. 2022, ApJL 937 L31"
+  },
+  "notes": [
+    "Using published Secrest+22 values for amplitude (post-correction)",
+    "Baseline direction validated within 2\u00b0 of published",
+    "Direction sigma uses maximum of published (~8\u00b0) and bootstrap estimate"
+  ]
+}

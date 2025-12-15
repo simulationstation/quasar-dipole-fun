@@ -1,0 +1,22 @@
+[
+  {
+    "heldout_name": "catwise_dir",
+    "model_mode": "full",
+    "heldout_log_mean_exp": -3.004289736256463,
+    "train_log_mean_exp": -1.4395923221496698,
+    "n_params": 8,
+    "mean_acceptance": 0.6034465277777777,
+    "convergence": {
+      "max_rhat": 1.0125150317441354,
+      "min_ess": 176.81218693863605
+    },
+    "posterior_predictive": {
+      "mean": 46.91759326554264,
+      "median": 42.62466458111827,
+      "q16": 20.743351404694412,
+      "q84": 71.25017804413989,
+      "observed": 0.0,
+      "z_score": -5.86469915819283
+    }
+  }
+]

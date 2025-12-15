@@ -1,0 +1,374 @@
+[
+  {
+    "model": "full",
+    "dir_like": "gaussian_angle",
+    "sigma_qso_dir": 8.0,
+    "log_mean_exp": -2.096876409882296,
+    "mean_loglike": -3.033833990547488,
+    "max_loglike": -0.047091424245657744,
+    "n_params": 8,
+    "active_params": [
+      "v_drift_kms",
+      "l_drift_deg",
+      "b_drift_deg",
+      "D_wall",
+      "alpha_wall_deg",
+      "phi_wall_deg",
+      "A_Q",
+      "A_R"
+    ],
+    "mean_acceptance": 0.5807972222222223,
+    "ll_component_stats": {
+      "wagenveld_wall_amp": {
+        "mean": -0.5260875691580404,
+        "std": 0.7389490666684466,
+        "min": -7.815177554118288,
+        "max": -4.04613725140755e-08
+      },
+      "wagenveld_wall_angle": {
+        "mean": -0.46057205926275674,
+        "std": 0.6569811129477195,
+        "min": -8.517020633647872,
+        "max": -7.373518985791734e-12
+      },
+      "catwise_amp": {
+        "mean": -0.4994960278870491,
+        "std": 0.7051646378360101,
+        "min": -7.93733189514012,
+        "max": -4.905654706839673e-10
+      },
+      "catwise_dir": {
+        "mean": -0.9261094457123411,
+        "std": 0.9328727794300581,
+        "min": -13.95010757938478,
+        "max": -6.89433423462804e-05
+      },
+      "radio_ratio": {
+        "mean": -0.621568888527301,
+        "std": 0.8933994816540584,
+        "min": -9.155088676409948,
+        "max": -1.0788588417826757e-10
+      }
+    },
+    "samples_csv": "posterior_samples_full.csv",
+    "summary_json": "posterior_summary_full.json",
+    "constraints": {
+      "source": "results/stage3/final/constraints.json",
+      "values": {},
+      "raw": {
+        "catwise_dipole": {
+          "amplitude": 0.0154,
+          "amplitude_sigma": 0.0015,
+          "l_deg": 238.2,
+          "b_deg": 28.8,
+          "direction_sigma_deg": 8.0,
+          "N_sources": 1355352
+        },
+        "derived_sigma_qso": 0.0015,
+        "derived_sigma_qso_dir_deg": 8.0,
+        "validation": {
+          "our_baseline_amplitude": 0.020985290289844055,
+          "our_baseline_l_deg": 236.01115215597173,
+          "our_baseline_b_deg": 28.774371321733305,
+          "our_bootstrap_dir_sigma_deg": 5.4655045768310755,
+          "separation_from_published_deg": 1.9184818846094198,
+          "validation_passed": true
+        },
+        "source": {
+          "catalog": "data/secrest/catwise_agns.fits",
+          "cuts": {
+            "b_cut": 30.0,
+            "w1cov_min": 80.0,
+            "w1_max": 16.4
+          },
+          "corrections": {
+            "nvss_removal": "published",
+            "ecliptic_correction": "published"
+          },
+          "reference": "Secrest et al. 2022, ApJL 937 L31"
+        },
+        "notes": [
+          "Using published Secrest+22 values for amplitude (post-correction)",
+          "Baseline direction validated within 2\u00b0 of published",
+          "Direction sigma uses maximum of published (~8\u00b0) and bootstrap estimate"
+        ]
+      }
+    }
+  },
+  {
+    "model": "wall_only",
+    "dir_like": "gaussian_angle",
+    "sigma_qso_dir": 8.0,
+    "log_mean_exp": -2.1853828291568282,
+    "mean_loglike": -3.0185774803797623,
+    "max_loglike": -0.44586948697437095,
+    "n_params": 5,
+    "active_params": [
+      "D_wall",
+      "alpha_wall_deg",
+      "phi_wall_deg",
+      "A_Q",
+      "A_R"
+    ],
+    "mean_acceptance": 0.5711708333333333,
+    "ll_component_stats": {
+      "wagenveld_wall_amp": {
+        "mean": -0.4955884957887016,
+        "std": 0.6816715754917513,
+        "min": -6.641384712052774,
+        "max": -2.045479856872434e-08
+      },
+      "wagenveld_wall_angle": {
+        "mean": -0.4637457977497789,
+        "std": 0.66181517233368,
+        "min": -7.431678125738389,
+        "max": -8.207040267402844e-15
+      },
+      "catwise_amp": {
+        "mean": -0.48412516251132565,
+        "std": 0.6864768119349126,
+        "min": -9.134656879334235,
+        "max": -9.096298374914786e-11
+      },
+      "catwise_dir": {
+        "mean": -0.9498543455694258,
+        "std": 0.852968032309267,
+        "min": -7.933823053028303,
+        "max": -3.888362129910874e-05
+      },
+      "radio_ratio": {
+        "mean": -0.6252636787605301,
+        "std": 0.8964132708427824,
+        "min": -9.753990449649773,
+        "max": -1.9212665130199792e-09
+      }
+    },
+    "samples_csv": "posterior_samples_wall_only.csv",
+    "summary_json": "posterior_summary_wall_only.json",
+    "constraints": {
+      "source": "results/stage3/final/constraints.json",
+      "values": {},
+      "raw": {
+        "catwise_dipole": {
+          "amplitude": 0.0154,
+          "amplitude_sigma": 0.0015,
+          "l_deg": 238.2,
+          "b_deg": 28.8,
+          "direction_sigma_deg": 8.0,
+          "N_sources": 1355352
+        },
+        "derived_sigma_qso": 0.0015,
+        "derived_sigma_qso_dir_deg": 8.0,
+        "validation": {
+          "our_baseline_amplitude": 0.020985290289844055,
+          "our_baseline_l_deg": 236.01115215597173,
+          "our_baseline_b_deg": 28.774371321733305,
+          "our_bootstrap_dir_sigma_deg": 5.4655045768310755,
+          "separation_from_published_deg": 1.9184818846094198,
+          "validation_passed": true
+        },
+        "source": {
+          "catalog": "data/secrest/catwise_agns.fits",
+          "cuts": {
+            "b_cut": 30.0,
+            "w1cov_min": 80.0,
+            "w1_max": 16.4
+          },
+          "corrections": {
+            "nvss_removal": "published",
+            "ecliptic_correction": "published"
+          },
+          "reference": "Secrest et al. 2022, ApJL 937 L31"
+        },
+        "notes": [
+          "Using published Secrest+22 values for amplitude (post-correction)",
+          "Baseline direction validated within 2\u00b0 of published",
+          "Direction sigma uses maximum of published (~8\u00b0) and bootstrap estimate"
+        ]
+      }
+    }
+  },
+  {
+    "model": "drift_only",
+    "dir_like": "gaussian_angle",
+    "sigma_qso_dir": 8.0,
+    "log_mean_exp": -15.908741799696669,
+    "mean_loglike": -16.40387551858575,
+    "max_loglike": -14.847008358657597,
+    "n_params": 5,
+    "active_params": [
+      "v_drift_kms",
+      "l_drift_deg",
+      "b_drift_deg",
+      "A_Q",
+      "A_R"
+    ],
+    "mean_acceptance": 0.6153885416666667,
+    "ll_component_stats": {
+      "wagenveld_wall_amp": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "wagenveld_wall_angle": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "catwise_amp": {
+        "mean": -0.4967724265120014,
+        "std": 0.6984736498721991,
+        "min": -6.216136890737921,
+        "max": -8.140522460465521e-12
+      },
+      "catwise_dir": {
+        "mean": -1.0614137959471341,
+        "std": 1.068946402999015,
+        "min": -12.323176163495432,
+        "max": -0.00041449621853378366
+      },
+      "radio_ratio": {
+        "mean": -14.845689296126611,
+        "std": 3.555968841739572e-15,
+        "min": -14.845689296126618,
+        "max": -14.845689296126615
+      }
+    },
+    "samples_csv": "posterior_samples_drift_only.csv",
+    "summary_json": "posterior_summary_drift_only.json",
+    "constraints": {
+      "source": "results/stage3/final/constraints.json",
+      "values": {},
+      "raw": {
+        "catwise_dipole": {
+          "amplitude": 0.0154,
+          "amplitude_sigma": 0.0015,
+          "l_deg": 238.2,
+          "b_deg": 28.8,
+          "direction_sigma_deg": 8.0,
+          "N_sources": 1355352
+        },
+        "derived_sigma_qso": 0.0015,
+        "derived_sigma_qso_dir_deg": 8.0,
+        "validation": {
+          "our_baseline_amplitude": 0.020985290289844055,
+          "our_baseline_l_deg": 236.01115215597173,
+          "our_baseline_b_deg": 28.774371321733305,
+          "our_bootstrap_dir_sigma_deg": 5.4655045768310755,
+          "separation_from_published_deg": 1.9184818846094198,
+          "validation_passed": true
+        },
+        "source": {
+          "catalog": "data/secrest/catwise_agns.fits",
+          "cuts": {
+            "b_cut": 30.0,
+            "w1cov_min": 80.0,
+            "w1_max": 16.4
+          },
+          "corrections": {
+            "nvss_removal": "published",
+            "ecliptic_correction": "published"
+          },
+          "reference": "Secrest et al. 2022, ApJL 937 L31"
+        },
+        "notes": [
+          "Using published Secrest+22 values for amplitude (post-correction)",
+          "Baseline direction validated within 2\u00b0 of published",
+          "Direction sigma uses maximum of published (~8\u00b0) and bootstrap estimate"
+        ]
+      }
+    }
+  },
+  {
+    "model": "cmb_only",
+    "dir_like": "gaussian_angle",
+    "sigma_qso_dir": 8.0,
+    "log_mean_exp": -21.225662915046236,
+    "mean_loglike": -21.377155893156598,
+    "max_loglike": -20.879303516645386,
+    "n_params": 2,
+    "active_params": [
+      "A_Q",
+      "A_R"
+    ],
+    "mean_acceptance": 0.7992291666666667,
+    "ll_component_stats": {
+      "wagenveld_wall_amp": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "wagenveld_wall_angle": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "catwise_amp": {
+        "mean": -0.4978523765539395,
+        "std": 0.7051127141897376,
+        "min": -9.711028036841926,
+        "max": -4.272237848269184e-11
+      },
+      "catwise_dir": {
+        "mean": -6.033614220476046,
+        "std": 1.420931265511226e-15,
+        "min": -6.033614220476052,
+        "max": -6.033614220476041
+      },
+      "radio_ratio": {
+        "mean": -14.845689296126611,
+        "std": 3.552713678800501e-15,
+        "min": -14.845689296126615,
+        "max": -14.845689296126615
+      }
+    },
+    "samples_csv": "posterior_samples_cmb_only.csv",
+    "summary_json": "posterior_summary_cmb_only.json",
+    "constraints": {
+      "source": "results/stage3/final/constraints.json",
+      "values": {},
+      "raw": {
+        "catwise_dipole": {
+          "amplitude": 0.0154,
+          "amplitude_sigma": 0.0015,
+          "l_deg": 238.2,
+          "b_deg": 28.8,
+          "direction_sigma_deg": 8.0,
+          "N_sources": 1355352
+        },
+        "derived_sigma_qso": 0.0015,
+        "derived_sigma_qso_dir_deg": 8.0,
+        "validation": {
+          "our_baseline_amplitude": 0.020985290289844055,
+          "our_baseline_l_deg": 236.01115215597173,
+          "our_baseline_b_deg": 28.774371321733305,
+          "our_bootstrap_dir_sigma_deg": 5.4655045768310755,
+          "separation_from_published_deg": 1.9184818846094198,
+          "validation_passed": true
+        },
+        "source": {
+          "catalog": "data/secrest/catwise_agns.fits",
+          "cuts": {
+            "b_cut": 30.0,
+            "w1cov_min": 80.0,
+            "w1_max": 16.4
+          },
+          "corrections": {
+            "nvss_removal": "published",
+            "ecliptic_correction": "published"
+          },
+          "reference": "Secrest et al. 2022, ApJL 937 L31"
+        },
+        "notes": [
+          "Using published Secrest+22 values for amplitude (post-correction)",
+          "Baseline direction validated within 2\u00b0 of published",
+          "Direction sigma uses maximum of published (~8\u00b0) and bootstrap estimate"
+        ]
+      }
+    }
+  }
+]
