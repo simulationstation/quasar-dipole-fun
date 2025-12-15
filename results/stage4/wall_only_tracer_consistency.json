@@ -1,0 +1,16 @@
+{
+  "qr_alignment": {
+    "mean": 8.545175614521046,
+    "std": 4.603351153878806,
+    "median": 7.961149265843444,
+    "q16": 3.5048289338958725,
+    "q84": 12.771063975683418,
+    "max": 21.743993694897583
+  },
+  "amplitude_ratio": {
+    "mean": 1.3701616849071439,
+    "std": 0.23779038250601953,
+    "median": 1.3541175838865795
+  },
+  "interpretation": "wall_only: perfect alignment (0 deg), stable ratio. full: increased scatter if drift adds tracer-dependent kinematic component."
+}

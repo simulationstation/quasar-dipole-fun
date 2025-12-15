@@ -1,0 +1,21 @@
+{
+  "amplitude": {
+    "observed": 0.0154,
+    "sim_mean": 0.015411306272401538,
+    "sim_std": 0.002228550264724215,
+    "p_value": 0.48,
+    "interpretation": "P(D_sim > D_obs)"
+  },
+  "cmb_separation": {
+    "observed": 27.790333215363468,
+    "sim_mean": 24.573455081353632,
+    "sim_std": 10.303195895843558,
+    "p_value": 0.355,
+    "interpretation": "P(sep_sim > sep_obs)"
+  },
+  "direction_recovery": {
+    "fraction_within_10deg": 0.015,
+    "sim_catwise_sep_mean": 27.095354430950664,
+    "sim_catwise_sep_std": 9.283290795961326
+  }
+}

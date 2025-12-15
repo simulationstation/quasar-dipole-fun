@@ -1,0 +1,200 @@
+{
+  "wall_only": {
+    "direction_stability": {
+      "input_meas_separation": {
+        "mean": 45.38799593588721,
+        "std": 15.069575764780417,
+        "median": 45.63313817734104,
+        "q16": 30.66733376191011,
+        "q84": 61.02369914112484
+      },
+      "input_cmb_separation": {
+        "mean": 22.38596462469901,
+        "std": 4.884680812011675,
+        "median": 21.806617766587586
+      },
+      "input_catwise_separation": {
+        "mean": 33.101961116528,
+        "std": 6.390859647256368,
+        "median": 32.97956237331735
+      },
+      "measured_cmb_separation": {
+        "mean": 65.96188788474262,
+        "std": 18.306971538689897,
+        "median": 67.53843874905724
+      },
+      "measured_catwise_separation": {
+        "mean": 59.46596844126454,
+        "std": 14.662892796382856,
+        "median": 59.63757309026876
+      },
+      "direction_scatter": {
+        "l_std": 7.679763504315594,
+        "b_std": 5.403296171141532,
+        "l_mean": 275.7563134554292,
+        "b_mean": 28.727121045378972,
+        "l_range": [
+          251.39392016514878,
+          298.33876974821203
+        ],
+        "b_range": [
+          15.993060669353826,
+          42.83012318231771
+        ]
+      }
+    },
+    "hemispheric_test": {
+      "ns_asymmetry": {
+        "mean": -0.0048811,
+        "std": 0.0014199969654322274,
+        "median": -0.004885714285714286,
+        "q16": -0.006307257142857143,
+        "q84": -0.0035268
+      },
+      "dipole_contrast": {
+        "mean": 0.004291692857142857,
+        "std": 0.0015243178606698614,
+        "median": 0.004218571428571429,
+        "q16": 0.0027388,
+        "q84": 0.005815314285714286
+      },
+      "observed_ns_asymmetry": 0.0
+    },
+    "tracer_consistency": {
+      "qr_alignment": {
+        "mean": 8.545175614521046,
+        "std": 4.603351153878806,
+        "median": 7.961149265843444,
+        "q16": 3.5048289338958725,
+        "q84": 12.771063975683418,
+        "max": 21.743993694897583
+      },
+      "amplitude_ratio": {
+        "mean": 1.3701616849071439,
+        "std": 0.23779038250601953,
+        "median": 1.3541175838865795
+      },
+      "interpretation": "wall_only: perfect alignment (0 deg), stable ratio. full: increased scatter if drift adds tracer-dependent kinematic component."
+    },
+    "ppc": {
+      "amplitude": {
+        "observed": 0.0154,
+        "sim_mean": 0.015351499199953324,
+        "sim_std": 0.001401039196394711,
+        "p_value": 0.46,
+        "interpretation": "P(D_sim > D_obs)"
+      },
+      "cmb_separation": {
+        "observed": 27.790333215363468,
+        "sim_mean": 22.38596462469901,
+        "sim_std": 4.884680812011675,
+        "p_value": 0.155,
+        "interpretation": "P(sep_sim > sep_obs)"
+      },
+      "direction_recovery": {
+        "fraction_within_10deg": 0.0,
+        "sim_catwise_sep_mean": 33.101961116528,
+        "sim_catwise_sep_std": 6.390859647256368
+      }
+    }
+  },
+  "full": {
+    "direction_stability": {
+      "input_meas_separation": {
+        "mean": 45.67574671472686,
+        "std": 18.627761159853904,
+        "median": 47.97442971155515,
+        "q16": 26.64567221343287,
+        "q84": 64.04085681745023
+      },
+      "input_cmb_separation": {
+        "mean": 24.573455081353632,
+        "std": 10.303195895843558,
+        "median": 23.795768851699453
+      },
+      "input_catwise_separation": {
+        "mean": 27.095354430950664,
+        "std": 9.283290795961326,
+        "median": 27.208383435149536
+      },
+      "measured_cmb_separation": {
+        "mean": 67.21883111180544,
+        "std": 25.177994342145443,
+        "median": 68.84032596477866
+      },
+      "measured_catwise_separation": {
+        "mean": 56.40854419364412,
+        "std": 20.964128305521907,
+        "median": 57.450964007169624
+      },
+      "direction_scatter": {
+        "l_std": 17.85977448083662,
+        "b_std": 12.984957632405061,
+        "l_mean": 261.8740283843045,
+        "b_mean": 29.11780114016432,
+        "l_range": [
+          207.132629772951,
+          301.3176823493205
+        ],
+        "b_range": [
+          0.7175029096434178,
+          64.87936049569352
+        ]
+      }
+    },
+    "hemispheric_test": {
+      "ns_asymmetry": {
+        "mean": -0.005075935714285714,
+        "std": 0.0022391458060531263,
+        "median": -0.0049278571428571435,
+        "q16": -0.0074853714285714286,
+        "q84": -0.0029998857142857147
+      },
+      "dipole_contrast": {
+        "mean": 0.0043345,
+        "std": 0.0018893700534780347,
+        "median": 0.004262142857142857,
+        "q16": 0.002784114285714286,
+        "q84": 0.006037828571428571
+      },
+      "observed_ns_asymmetry": 0.0
+    },
+    "tracer_consistency": {
+      "qr_alignment": {
+        "mean": 12.321812168951041,
+        "std": 10.510212410752123,
+        "median": 9.260396395424072,
+        "q16": 2.7258137147490866,
+        "q84": 23.255969672527186,
+        "max": 50.98896938984226
+      },
+      "amplitude_ratio": {
+        "mean": 1.484889796795635,
+        "std": 0.36304170649947953,
+        "median": 1.4213844960663589
+      },
+      "interpretation": "wall_only: perfect alignment (0 deg), stable ratio. full: increased scatter if drift adds tracer-dependent kinematic component."
+    },
+    "ppc": {
+      "amplitude": {
+        "observed": 0.0154,
+        "sim_mean": 0.015411306272401538,
+        "sim_std": 0.002228550264724215,
+        "p_value": 0.48,
+        "interpretation": "P(D_sim > D_obs)"
+      },
+      "cmb_separation": {
+        "observed": 27.790333215363468,
+        "sim_mean": 24.573455081353632,
+        "sim_std": 10.303195895843558,
+        "p_value": 0.355,
+        "interpretation": "P(sep_sim > sep_obs)"
+      },
+      "direction_recovery": {
+        "fraction_within_10deg": 0.015,
+        "sim_catwise_sep_mean": 27.095354430950664,
+        "sim_catwise_sep_std": 9.283290795961326
+      }
+    }
+  }
+}

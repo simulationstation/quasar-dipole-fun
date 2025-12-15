@@ -1,0 +1,221 @@
+{
+  "model_mode": "wall_only",
+  "dir_like": "gaussian_angle",
+  "active_parameters": [
+    "D_wall",
+    "alpha_wall_deg",
+    "phi_wall_deg",
+    "A_Q",
+    "A_R"
+  ],
+  "fixed_parameters": {
+    "v_drift_kms": 0.0,
+    "l_drift_deg": 0.0,
+    "b_drift_deg": 0.0
+  },
+  "n_chains": 6,
+  "samples_per_chain": 10000,
+  "total_samples": 60000,
+  "acceptance_rates": [
+    0.37309,
+    0.366978,
+    0.36684,
+    0.375144,
+    0.366844,
+    0.366128
+  ],
+  "loglike_scores": {
+    "mean_loglike": -3.017262544964771,
+    "log_mean_exp": -2.183094878644029,
+    "max_loglike": -0.4173647816510897
+  },
+  "ll_component_stats": {
+    "wagenveld_wall_amp": {
+      "mean": -0.4907712485631852,
+      "std": 0.6866488650515151,
+      "min": -8.353834516442609,
+      "max": -1.0218950084762829e-10
+    },
+    "wagenveld_wall_angle": {
+      "mean": -0.46788246374927295,
+      "std": 0.6710604859213581,
+      "min": -9.899689890096784,
+      "max": -1.6426831205627584e-10
+    },
+    "catwise_amp": {
+      "mean": -0.4861039071102534,
+      "std": 0.6891289094066767,
+      "min": -10.5851495170973,
+      "max": -4.406755929834293e-12
+    },
+    "catwise_dir": {
+      "mean": -0.9514978906949045,
+      "std": 0.8709403268706841,
+      "min": -10.69874669015131,
+      "max": -6.542947179089943e-06
+    },
+    "radio_ratio": {
+      "mean": -0.6210070348471546,
+      "std": 0.889751786248921,
+      "min": -10.601024425246141,
+      "max": -2.3549981756640756e-09
+    }
+  },
+  "ll_total_stats": {
+    "mean": -3.017262544964771,
+    "std": 1.676505996874018,
+    "min": -15.982062030170653,
+    "max": -0.4173647816510897
+  },
+  "step_sizes": {
+    "D_wall": 0.001152595355530065,
+    "alpha_wall_deg": 8.232823968071893,
+    "phi_wall_deg": 26.345036697830054,
+    "A_Q": 1.3480932334675915,
+    "A_R": 1.3480932334675915
+  },
+  "parameters": {
+    "D_wall": {
+      "mean": 0.008643266136390687,
+      "std": 0.0012761995139549387,
+      "median": 0.008641546084551682,
+      "q16": 0.00737029955411377,
+      "q84": 0.009913168277689897,
+      "R_hat": 0.9999997816841629,
+      "ESS": 29784.41034749116
+    },
+    "alpha_wall_deg": {
+      "mean": 41.90225710281222,
+      "std": 7.173970941471881,
+      "median": 41.80632774390682,
+      "q16": 34.81269467249909,
+      "q84": 49.03388755124741,
+      "R_hat": 0.9999679564115266,
+      "ESS": 47830.397766682545
+    },
+    "phi_wall_deg": {
+      "mean": 299.52148585490187,
+      "std": 25.64944920634319,
+      "median": 300.496770075252,
+      "q16": 280.6762947416829,
+      "q84": 319.8677389833006,
+      "R_hat": 0.9999687503939798,
+      "ESS": 57856.85784635304
+    },
+    "A_Q": {
+      "mean": 6.3246406762379594,
+      "std": 1.6624374199019092,
+      "median": 6.346522161871695,
+      "q16": 4.664516107375882,
+      "q84": 7.968666975672522,
+      "R_hat": 1.0000001287857312,
+      "ESS": 29250.21691573406
+    },
+    "A_R": {
+      "mean": 2.743859879907171,
+      "std": 0.7774062961283794,
+      "median": 2.621435910886488,
+      "q16": 2.058968716323603,
+      "q84": 3.397063299540452,
+      "R_hat": 0.9999956311267012,
+      "ESS": 38726.208878092526
+    }
+  },
+  "derived": {
+    "beta_tot": {
+      "mean": 0.0012335867368618058,
+      "median": 0.001233586736861806,
+      "q16": 0.001233586736861806,
+      "q84": 0.001233586736861806
+    },
+    "v_tot_kms": {
+      "mean": 369.82,
+      "median": 369.82,
+      "q16": 369.82,
+      "q84": 369.82
+    },
+    "D_kin_Q": {
+      "mean": 0.00780199285362383,
+      "median": 0.007828985564084439,
+      "q16": 0.005754085203937148,
+      "q84": 0.009830041891658304
+    },
+    "D_kin_R": {
+      "mean": 0.0033847891556607144,
+      "median": 0.003233768571202819,
+      "q16": 0.002539916500070175,
+      "q84": 0.004190572230593106
+    },
+    "catwise_separation": {
+      "mean": 9.972650065204812,
+      "median": 9.612367342655816,
+      "q16": 5.179490635347876,
+      "q84": 14.563924350804056
+    },
+    "radio_ratio": {
+      "mean": 3.4764273108165034,
+      "median": 3.4815636351122787,
+      "q16": 2.9677494498984145,
+      "q84": 3.9825348981520268
+    },
+    "alpha_wall_fraction_in_31_47": 0.6992333333333334
+  },
+  "convergence": {
+    "R_hat": {
+      "D_wall": 0.9999997816841629,
+      "alpha_wall_deg": 0.9999679564115266,
+      "phi_wall_deg": 0.9999687503939798,
+      "A_Q": 1.0000001287857312,
+      "A_R": 0.9999956311267012
+    },
+    "ESS": {
+      "D_wall": 29784.41034749116,
+      "alpha_wall_deg": 47830.397766682545,
+      "phi_wall_deg": 57856.85784635304,
+      "A_Q": 29250.21691573406,
+      "A_R": 38726.208878092526
+    }
+  },
+  "constraints": {
+    "source": "results/stage3/final/constraints.json",
+    "values": {},
+    "raw": {
+      "catwise_dipole": {
+        "amplitude": 0.0154,
+        "amplitude_sigma": 0.0015,
+        "l_deg": 238.2,
+        "b_deg": 28.8,
+        "direction_sigma_deg": 8.0,
+        "N_sources": 1355352
+      },
+      "derived_sigma_qso": 0.0015,
+      "derived_sigma_qso_dir_deg": 8.0,
+      "validation": {
+        "our_baseline_amplitude": 0.020985290289844055,
+        "our_baseline_l_deg": 236.01115215597173,
+        "our_baseline_b_deg": 28.774371321733305,
+        "our_bootstrap_dir_sigma_deg": 5.4655045768310755,
+        "separation_from_published_deg": 1.9184818846094198,
+        "validation_passed": true
+      },
+      "source": {
+        "catalog": "data/secrest/catwise_agns.fits",
+        "cuts": {
+          "b_cut": 30.0,
+          "w1cov_min": 80.0,
+          "w1_max": 16.4
+        },
+        "corrections": {
+          "nvss_removal": "published",
+          "ecliptic_correction": "published"
+        },
+        "reference": "Secrest et al. 2022, ApJL 937 L31"
+      },
+      "notes": [
+        "Using published Secrest+22 values for amplitude (post-correction)",
+        "Baseline direction validated within 2\u00b0 of published",
+        "Direction sigma uses maximum of published (~8\u00b0) and bootstrap estimate"
+      ]
+    }
+  }
+}
