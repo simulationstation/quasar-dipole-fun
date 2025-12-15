@@ -63,6 +63,12 @@ The structure is deliberately generic:
 
 If any required input is missing, the tools will halt with a descriptive error rather than proceed with fabricated or simulated data.
 
+## ℓ-space dipole diagnostic
+
+`scripts/ell_space_test.py` builds HEALPix maps for the CatWISE catalog (or any catalog with the same columns), slices them by W1 magnitude, and compares the observed low-$\ell$ power to structured null hypotheses. The output includes per-slice $C_\ell$ arrays, null distributions for $C_1$/$C_2$/$C_3$, dipole direction stability, and a Markdown interpretation report in `results/ell_space/<tag>/`.
+
+See `docs/ell_space_test.md` for interpretation guidance and runnable examples (full sample, six-bin slicing, and the quick smoke test mode).
+
 ## CatWISE end-to-end reproduction
 
 `reproduce_catwise_dipole.py` adds a streaming, reproducible pipeline for the CatWISE quasar sample. It accepts FITS/CSV/Parquet files stored locally (no downloads).
