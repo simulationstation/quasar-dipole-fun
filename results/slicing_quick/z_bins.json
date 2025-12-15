@@ -1,0 +1,8 @@
+{
+  "catalog": "./data/secrest/secrest+22_accepted/wise/reference/catwise_agns.fits",
+  "quick_note": "Used random subset of 200000 sources for quick mode.",
+  "detected_column": null,
+  "fractions": {},
+  "available": false,
+  "reason": "No usable redshift column with >=20% finite values"
+}
