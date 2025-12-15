@@ -12,122 +12,24 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
-import os
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict
 
 import numpy as np
+from astropy.coordinates import SkyCoord
+from astropy.table import Table
+import astropy.units as u
 
-try:
-    from astropy.table import Table
-    from astropy.coordinates import SkyCoord
-    import astropy.units as u
-except ImportError as exc:
-    raise SystemExit("astropy required") from exc
-
-
-# Published Secrest+22 values for comparison
-SECREST_PUBLISHED = {
-    "amplitude": 0.0154,
-    "amplitude_sigma": 0.0015,
-    "l_deg": 238.2,
-    "b_deg": 28.8,
-    "l_sigma_deg": 8.0,  # approximate from paper
-    "b_sigma_deg": 8.0,
-    "N_sources": 1355352,  # after all cuts
-    "reference": "Secrest et al. 2022, ApJL 937 L31"
-}
-
-# CMB dipole direction for comparison
-CMB_L_DEG = 264.021
-CMB_B_DEG = 48.253
-
-
-def lb_to_unitvec(l_deg: float, b_deg: float) -> np.ndarray:
-    l = math.radians(l_deg)
-    b = math.radians(b_deg)
-    return np.array([
-        math.cos(b) * math.cos(l),
-        math.cos(b) * math.sin(l),
-        math.sin(b),
-    ])
-
-
-def angle_deg(v1: np.ndarray, v2: np.ndarray) -> float:
-    dot = np.clip(np.dot(v1, v2), -1.0, 1.0)
-    return math.degrees(math.acos(dot))
-
-
-def compute_dipole(l_deg: np.ndarray, b_deg: np.ndarray) -> Tuple[float, float, float, np.ndarray]:
-    """Compute dipole from Galactic coordinates.
-
-    Returns: (amplitude, l_dip, b_dip, sum_vector)
-    """
-    l_rad = np.radians(l_deg)
-    b_rad = np.radians(b_deg)
-    cos_b = np.cos(b_rad)
-
-    x = cos_b * np.cos(l_rad)
-    y = cos_b * np.sin(l_rad)
-    z = np.sin(b_rad)
-
-    sum_vec = np.array([x.sum(), y.sum(), z.sum()])
-    N = len(l_deg)
-
-    amplitude = 3.0 * np.linalg.norm(sum_vec) / N if N > 0 else np.nan
-
-    if np.linalg.norm(sum_vec) > 0:
-        d_unit = sum_vec / np.linalg.norm(sum_vec)
-        l_dip = math.degrees(math.atan2(d_unit[1], d_unit[0])) % 360.0
-        b_dip = math.degrees(math.asin(np.clip(d_unit[2], -1, 1)))
-    else:
-        l_dip, b_dip = np.nan, np.nan
-
-    return amplitude, l_dip, b_dip, sum_vec
-
-
-def bootstrap_dipole(l_deg: np.ndarray, b_deg: np.ndarray, n_boot: int = 200,
-                     seed: int = 42) -> Dict:
-    """Bootstrap dipole uncertainties."""
-    rng = np.random.default_rng(seed)
-    N = len(l_deg)
-
-    D_boot = []
-    l_boot = []
-    b_boot = []
-
-    for _ in range(n_boot):
-        idx = rng.choice(N, size=N, replace=True)
-        D, l, b, _ = compute_dipole(l_deg[idx], b_deg[idx])
-        D_boot.append(D)
-        l_boot.append(l)
-        b_boot.append(b)
-
-    D_boot = np.array(D_boot)
-    l_boot = np.array(l_boot)
-    b_boot = np.array(b_boot)
-
-    # Direction uncertainty via angular separation from median
-    median_l = np.median(l_boot)
-    median_b = np.median(b_boot)
-    median_vec = lb_to_unitvec(median_l, median_b)
-
-    seps = []
-    for l, b in zip(l_boot, b_boot):
-        v = lb_to_unitvec(l, b)
-        seps.append(angle_deg(v, median_vec))
-
-    return {
-        "n_bootstrap": n_boot,
-        "amplitude_q16": float(np.percentile(D_boot, 16)),
-        "amplitude_q50": float(np.percentile(D_boot, 50)),
-        "amplitude_q84": float(np.percentile(D_boot, 84)),
-        "amplitude_std": float(np.std(D_boot)),
-        "l_median": float(median_l),
-        "b_median": float(median_b),
-        "direction_sigma_deg": float(np.percentile(seps, 68)),
-    }
+from secrest_utils import (
+    CMB_B_DEG,
+    CMB_L_DEG,
+    SECREST_PUBLISHED,
+    angle_deg,
+    apply_baseline_cuts,
+    bootstrap_dipole,
+    compute_dipole,
+    lb_to_unitvec,
+)
 
 
 def compute_coverage(l_deg: np.ndarray, b_deg: np.ndarray) -> Dict:
@@ -183,8 +85,6 @@ def main():
     # Extract columns
     l_all = tbl['l'].data.astype(float)
     b_all = tbl['b'].data.astype(float)
-    w1_all = tbl['w1'].data.astype(float)
-    w1cov_all = tbl['w1cov'].data.astype(float) if 'w1cov' in tbl.colnames else None
 
     # Document cuts
     cuts_applied = []
@@ -214,48 +114,17 @@ def main():
         })
         print(f"  After exclusion mask: {mask.sum()} (excluded {exclude_mask.sum()})")
 
-    # W1 coverage cut (Secrest uses >= 80)
-    if w1cov_all is not None and args.w1cov_min is not None:
-        cov_mask = w1cov_all >= args.w1cov_min
-        mask &= cov_mask
-        cuts_applied.append({
-            "name": "W1 coverage",
-            "condition": f"w1cov >= {args.w1cov_min}",
-            "N_after": int(mask.sum())
-        })
-        print(f"  After w1cov >= {args.w1cov_min}: {mask.sum()}")
-
-    # Galactic latitude cut
-    gal_mask = np.abs(b_all) > args.b_cut
-    mask &= gal_mask
-    cuts_applied.append({
-        "name": "Galactic latitude",
-        "condition": f"|b| > {args.b_cut} deg",
-        "N_before": int((~gal_mask).sum() + gal_mask.sum()),
-        "N_after": int(mask.sum())
-    })
-    print(f"  After |b| > {args.b_cut}°: {mask.sum()}")
-
-    # W1 magnitude cuts
-    if args.w1_min is not None:
-        w1_min_mask = w1_all >= args.w1_min
-        mask &= w1_min_mask
-        cuts_applied.append({
-            "name": "W1 minimum",
-            "condition": f"W1 >= {args.w1_min}",
-            "N_after": int(mask.sum())
-        })
-        print(f"  After W1 >= {args.w1_min}: {mask.sum()}")
-
-    if args.w1_max is not None:
-        w1_max_mask = w1_all <= args.w1_max
-        mask &= w1_max_mask
-        cuts_applied.append({
-            "name": "W1 maximum",
-            "condition": f"W1 <= {args.w1_max}",
-            "N_after": int(mask.sum())
-        })
-        print(f"  After W1 <= {args.w1_max}: {mask.sum()}")
+    # Baseline cuts (shared with slicing script)
+    mask, base_cuts = apply_baseline_cuts(
+        tbl,
+        b_cut=args.b_cut,
+        w1cov_min=args.w1cov_min,
+        w1_max=args.w1_max,
+        w1_min=args.w1_min,
+        existing_mask=mask,
+    )
+    cuts_applied.extend(base_cuts)
+    print(f"  After baseline cuts: {mask.sum()}")
 
     # Apply mask
     l_cut = l_all[mask]
@@ -271,7 +140,7 @@ def main():
 
     # Bootstrap
     print(f"\nBootstrapping ({args.bootstrap} resamples)...")
-    boot = bootstrap_dipole(l_cut, b_cut, n_boot=args.bootstrap, seed=args.seed)
+    boot = bootstrap_dipole(l_cut, b_cut, n_bootstrap=args.bootstrap, seed=args.seed).as_dict()
     print(f"  Amplitude [16,50,84]: [{boot['amplitude_q16']:.5f}, {boot['amplitude_q50']:.5f}, {boot['amplitude_q84']:.5f}]")
     print(f"  Direction sigma: {boot['direction_sigma_deg']:.2f} deg")
 
