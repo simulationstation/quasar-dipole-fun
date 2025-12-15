@@ -1,6 +1,8 @@
 """Lightweight tests for generate_mock_catalog utilities."""
 
-import numpy as np
+import pytest
+
+np = pytest.importorskip("numpy")
 
 from generate_mock_catalog import unitvec_to_radec
 

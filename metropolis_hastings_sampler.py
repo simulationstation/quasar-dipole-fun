@@ -306,17 +306,16 @@ def convert_sigma_dir_to_kappa(sigma_dir_deg: float) -> float:
 def apply_constraints_from_file(path: str) -> Dict[str, Any]:
     """Load constraint overrides from a JSON file.
 
-    Expected format (matches reproduce_catwise_dipole.py output)::
+    Supports the Stage-3 pipeline output (dipole_constraints.json) with keys::
 
         {
-          "catwise": {
-            "D_QSO_OBS": ...,
-            "L_QSO_OBS_DEG": ...,
-            "B_QSO_OBS_DEG": ...,
-            "SIGMA_QSO": ...,
-            "SIGMA_QSO_DIR_DEG": ...
-          }
+          "dipole": {"D": ..., "l_deg": ..., "b_deg": ...},
+          "sigma_amp_used": ...,
+          "sigma_dir_deg_used": ...,
+          ...
         }
+
+    Falls back to the legacy ``{"catwise": {...}}`` structure if needed.
     """
 
     global D_QSO_OBS, L_QSO_OBS_DEG, B_QSO_OBS_DEG, SIGMA_QSO, SIGMA_QSO_DIR_DEG, n_QSO_obs, CONSTRAINTS_INFO
@@ -324,24 +323,47 @@ def apply_constraints_from_file(path: str) -> Dict[str, Any]:
     with open(path, "r", encoding="utf-8") as f:
         payload = json.load(f)
 
-    cat = payload.get("catwise", payload)
     used: Dict[str, Any] = {}
 
-    mapping = {
-        "D_QSO_OBS": "D_QSO_OBS",
-        "L_QSO_OBS_DEG": "L_QSO_OBS_DEG",
-        "B_QSO_OBS_DEG": "B_QSO_OBS_DEG",
-        "SIGMA_QSO": "SIGMA_QSO",
-        "SIGMA_QSO_DIR_DEG": "SIGMA_QSO_DIR_DEG",
-    }
+    dipole_block = payload.get("dipole")
+    bootstrap_block = payload.get("bootstrap", {})
 
-    for src, dst in mapping.items():
-        if src in cat and cat[src] is not None:
-            globals()[dst] = float(cat[src])
-            used[dst] = float(cat[src])
+    if dipole_block:
+        D_QSO_OBS = float(dipole_block.get("D", D_QSO_OBS))
+        L_QSO_OBS_DEG = float(dipole_block.get("l_deg", L_QSO_OBS_DEG))
+        B_QSO_OBS_DEG = float(dipole_block.get("b_deg", B_QSO_OBS_DEG))
+        used.update(
+            {
+                "D_QSO_OBS": D_QSO_OBS,
+                "L_QSO_OBS_DEG": L_QSO_OBS_DEG,
+                "B_QSO_OBS_DEG": B_QSO_OBS_DEG,
+            }
+        )
+
+    legacy = payload.get("catwise", {})
+    if legacy:
+        for key in ("D_QSO_OBS", "L_QSO_OBS_DEG", "B_QSO_OBS_DEG"):
+            if key in legacy:
+                globals()[key] = float(legacy[key])
+                used[key] = float(legacy[key])
+
+    sigma_amp = payload.get("sigma_amp_used", bootstrap_block.get("sigma_amp_used"))
+    if sigma_amp is None and bootstrap_block:
+        d84 = bootstrap_block.get("D_p84")
+        d16 = bootstrap_block.get("D_p16")
+        if d84 is not None and d16 is not None:
+            sigma_amp = 0.5 * (float(d84) - float(d16))
+    if sigma_amp is not None:
+        SIGMA_QSO = float(sigma_amp)
+        used["SIGMA_QSO"] = SIGMA_QSO
+
+    sigma_dir = payload.get("sigma_dir_deg_used", bootstrap_block.get("dir_sigma_deg"))
+    if sigma_dir is not None:
+        SIGMA_QSO_DIR_DEG = float(sigma_dir)
+        used["SIGMA_QSO_DIR_DEG"] = SIGMA_QSO_DIR_DEG
 
     n_QSO_obs = lb_to_unitvec(L_QSO_OBS_DEG, B_QSO_OBS_DEG)
-    CONSTRAINTS_INFO = {"source": str(path), "values": used}
+    CONSTRAINTS_INFO = {"source": str(path), "values": used, "raw": payload}
     return CONSTRAINTS_INFO
 
 # -------------------------
@@ -1604,7 +1626,7 @@ def main() -> None:
     if args.constraints:
         constraints_info = apply_constraints_from_file(args.constraints)
         if verbose:
-            print("Loaded constraint overrides:")
+            print(f"Loaded constraint overrides from {args.constraints}:")
             for k, v in constraints_info.get("values", {}).items():
                 print(f"  {k} = {v}")
 
@@ -1652,6 +1674,7 @@ def main() -> None:
                 "ll_component_stats": r["ll_comp_stats"],
                 "samples_csv": r.get("samples_csv", f"posterior_samples_{r['config'].mode}.csv"),
                 "summary_json": r.get("summary_json", f"posterior_summary_{r['config'].mode}.json"),
+                "constraints": constraints_info or CONSTRAINTS_INFO,
             })
 
         with open(comparison_file, "w", encoding="utf-8") as f:

@@ -113,3 +113,27 @@ python metropolis_hastings_sampler.py --constraints results/catwise/constraints_
 ```
 
 When provided, the sampler prints the values it is using for `D_QSO_OBS`, `L_QSO_OBS_DEG`, `B_QSO_OBS_DEG`, `SIGMA_QSO`, and `SIGMA_QSO_DIR_DEG`, and embeds the constraint metadata in `posterior_summary.json`.
+
+## Stage-3 CatWISE reproduction and sampler integration
+
+The Stage-3 pipeline integrates the Secrest CatWISE catalog reproduction (with NVSS removal and ecliptic corrections) with the sampler. Key CLIs:
+
+- Derive constraints (baseline example):
+  ```bash
+  python pipelines/derive_catwise_constraints.py \
+    --catalog data/secrest/secrest+22_accepted/wise/reference/catwise_agns.fits \
+    --run-tag stage3_baseline \
+    --bootstrap 200 --seed 42
+  ```
+- Run the full Stage-3 orchestration (baseline/ecliptic/NVSS modes):
+  ```bash
+  python run_stage3_catwise.py --catalog data/secrest/secrest+22_accepted/wise/reference/catwise_agns.fits \
+    --nvss-catalog /path/to/nvss_catalog.fits --run-tag stage3_demo --seed 42
+  ```
+- Run the sampler directly with derived constraints:
+  ```bash
+  python metropolis_hastings_sampler.py --constraints results/secrest_reproduction/stage3_baseline/dipole_constraints.json \
+    --compare-models --seed 42
+  ```
+
+Outputs are placed under `results/secrest_reproduction/<run-tag>/` for constraint derivation and `results/stage3/<run-tag>/` for orchestrated sampler runs. Each mode writes its own `REPORT.md`, summaries, and sampler products for reproducible bookkeeping.
