@@ -1,0 +1,79 @@
+{
+  "file": "./data/secrest/secrest+22_accepted/wise/reference/catwise_agns.fits",
+  "rows": 4145046,
+  "columns": {
+    "source_id": {
+      "dtype": "|S27",
+      "unit": null
+    },
+    "ra": {
+      "dtype": ">f8",
+      "unit": "deg"
+    },
+    "dec": {
+      "dtype": ">f8",
+      "unit": "deg"
+    },
+    "w1cov": {
+      "dtype": ">f8",
+      "unit": null
+    },
+    "ebv": {
+      "dtype": ">f4",
+      "unit": null
+    },
+    "w1": {
+      "dtype": ">f4",
+      "unit": null
+    },
+    "w12": {
+      "dtype": ">f4",
+      "unit": null
+    },
+    "Tb": {
+      "dtype": ">f8",
+      "unit": null
+    },
+    "l": {
+      "dtype": ">f8",
+      "unit": "deg"
+    },
+    "b": {
+      "dtype": ">f8",
+      "unit": "deg"
+    },
+    "elon": {
+      "dtype": ">f8",
+      "unit": "deg"
+    },
+    "elat": {
+      "dtype": ">f8",
+      "unit": "deg"
+    },
+    "sgl": {
+      "dtype": ">f8",
+      "unit": "deg"
+    },
+    "sgb": {
+      "dtype": ">f8",
+      "unit": "deg"
+    },
+    "alpha": {
+      "dtype": ">f8",
+      "unit": null
+    },
+    "logS": {
+      "dtype": ">f8",
+      "unit": "dex(mJy)"
+    }
+  },
+  "key_columns": {
+    "ra": "ra",
+    "dec": "dec",
+    "w1_mag": "w1",
+    "w2_mag": "w2",
+    "w1_w2_color": "w12",
+    "galactic_l": null,
+    "galactic_b": null
+  }
+}

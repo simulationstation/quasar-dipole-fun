@@ -1,0 +1,23 @@
+{
+  "b_cut_deg": 30.0,
+  "w1_min": null,
+  "w1_max": 16.4,
+  "cuts_applied": [
+    {
+      "name": "W1 coverage",
+      "condition": "w1cov >= 80.0",
+      "N_after": 4142887
+    },
+    {
+      "name": "Galactic latitude",
+      "condition": "|b| > 30.0 deg",
+      "N_before": 4145046,
+      "N_after": 1972299
+    },
+    {
+      "name": "W1 maximum",
+      "condition": "W1 <= 16.4",
+      "N_after": 1401166
+    }
+  ]
+}

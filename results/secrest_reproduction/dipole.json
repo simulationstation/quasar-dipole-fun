@@ -1,0 +1,43 @@
+{
+  "catalog": "./data/secrest/secrest+22_accepted/wise/reference/catwise_agns.fits",
+  "N_raw": 4145046,
+  "N_final": 1401166,
+  "dipole": {
+    "amplitude": 0.020985290289844055,
+    "l_deg": 236.01115215597173,
+    "b_deg": 28.774371321733305
+  },
+  "bootstrap": {
+    "n_bootstrap": 200,
+    "amplitude_q16": 0.01975705387217155,
+    "amplitude_q50": 0.021127815596589293,
+    "amplitude_q84": 0.02232827937535297,
+    "amplitude_std": 0.0013441824174872657,
+    "l_median": 237.0531697396673,
+    "b_median": 28.467557438159663,
+    "direction_sigma_deg": 5.4655045768310755
+  },
+  "comparison_to_published": {
+    "recovered": {
+      "amplitude": 0.020985290289844055,
+      "l_deg": 236.01115215597173,
+      "b_deg": 28.774371321733305,
+      "N_sources": 1401166
+    },
+    "published_secrest": {
+      "amplitude": 0.0154,
+      "amplitude_sigma": 0.0015,
+      "l_deg": 238.2,
+      "b_deg": 28.8,
+      "l_sigma_deg": 8.0,
+      "b_sigma_deg": 8.0,
+      "N_sources": 1355352,
+      "reference": "Secrest et al. 2022, ApJL 937 L31"
+    },
+    "angular_separation_from_published_deg": 1.9184818846094198,
+    "angular_separation_from_cmb_deg": 29.025478235205718,
+    "amplitude_diff_sigma": 4.155157973487603,
+    "direction_diff_sigma": 0.35101642632266616
+  },
+  "cmb_separation_deg": 29.025478235205718
+}
