@@ -1,0 +1,9 @@
+# Ignore large data files
+*.csv
+*.csv.gz
+*.fits
+*.tsv
+*.parquet
+
+# Keep schema/metadata files
+!*_schema.json

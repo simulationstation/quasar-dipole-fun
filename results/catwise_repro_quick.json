@@ -1,0 +1,51 @@
+{
+  "data_file": "./data/catwise/catwise_highlat.csv",
+  "data_size_mb": 275,
+  "excerpt_files": {
+    "csv_gz": "./data/catwise/catwise_excerpt.csv.gz",
+    "schema": "./data/catwise/catwise_excerpt_schema.json"
+  },
+  "N_raw": 2000000,
+  "N_after_cuts": 2000000,
+  "cuts_applied": {
+    "galactic_b_min_deg": 20,
+    "w1_min": 14,
+    "w1_max": 17,
+    "qso_prob_cut": "none (raw CatWISE, not quasar sample)"
+  },
+  "hemisphere_split": {
+    "north_pct": 36.9,
+    "south_pct": 63.1
+  },
+  "dipole": {
+    "amplitude": 1.20296,
+    "l_deg": 344.58,
+    "b_deg": -34.24,
+    "note": "SPURIOUS - due to non-uniform sky sampling from TAP query"
+  },
+  "bootstrap": {
+    "n_resamples": 200,
+    "amplitude_q16": 1.20221,
+    "amplitude_q50": 1.20306,
+    "amplitude_q84": 1.20389,
+    "direction_uncertainty_deg": 0.07
+  },
+  "columns_used": {
+    "ra": "ra",
+    "dec": "dec",
+    "glon": "glon",
+    "glat": "glat",
+    "w1": "w1mpro"
+  },
+  "anomalies": [
+    "TAP query returns contiguous rows, not uniform all-sky sample",
+    "Hemisphere imbalance: 63% south vs 37% north",
+    "No sources at |b| > 60 degrees",
+    "Spurious dipole D=1.2 is a sampling artifact, not cosmological"
+  ],
+  "next_steps": [
+    "Need actual Secrest quasar sample (with QSO probabilities) for valid dipole",
+    "OR query multiple sky patches to achieve uniform coverage",
+    "Pipeline code validated - coordinate transform and masking work correctly"
+  ]
+}

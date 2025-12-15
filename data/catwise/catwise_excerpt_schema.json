@@ -1,0 +1,21 @@
+{
+  "source": "IPAC TAP catwise_2020",
+  "query": "SELECT ... FROM catwise_2020 WHERE w1mpro BETWEEN 14 AND 17 AND ABS(glat) > 20",
+  "columns": [
+    "source_name",
+    "ra",
+    "dec",
+    "w1mpro",
+    "w1sigmpro",
+    "w2mpro",
+    "w2sigmpro",
+    "glon",
+    "glat",
+    "cc_flags",
+    "ab_flags"
+  ],
+  "row_count": 2000000,
+  "selection": "MAXREC=2000000, w1mpro 14-17, |glat|>20",
+  "parquet_available": false,
+  "warning": "TAP query returns contiguous rows, NOT uniform sky sample. Hemisphere imbalance: 63% south, 37% north."
+}
