@@ -26,7 +26,9 @@ def load_maps(delta_path: Path, mask_path: Path) -> tuple[np.ndarray, np.ndarray
 def _dominant_axis_for_ell(
     alm: np.ndarray, ell: int, lmax: int, mask: np.ndarray, nside: int
 ) -> Dict[str, float]:
-    ell_indices = hp.Alm.getl(alm) == ell
+    # Get l values for each alm index
+    l_arr, m_arr = hp.Alm.getlm(lmax)
+    ell_indices = l_arr == ell
     ell_only = np.zeros_like(alm)
     ell_only[ell_indices] = alm[ell_indices]
 

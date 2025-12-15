@@ -42,21 +42,26 @@ def _ra_scramble(
 def _isotropic_catalog(
     n: int, mask: np.ndarray, nside: int, rng: np.random.Generator
 ) -> Tuple[np.ndarray, np.ndarray]:
-    ra_list: List[float] = []
-    dec_list: List[float] = []
-    npix = hp.nside2npix(nside)
-    unmasked_pixels = np.where(~mask)[0]
+    # Vectorized rejection sampling - generate in batches
+    f_sky = float(np.sum(~mask)) / len(mask)
+    # Overgenerate by 1/f_sky + 20% buffer
+    batch_size = int(n / f_sky * 1.2) + 1000
+
+    ra_list = []
+    dec_list = []
 
     while len(ra_list) < n:
-        theta = np.arccos(1 - 2 * rng.random())
-        phi = rng.uniform(0.0, 2 * np.pi)
+        # Generate batch of random points on sphere
+        theta = np.arccos(1 - 2 * rng.random(batch_size))
+        phi = rng.uniform(0.0, 2 * np.pi, batch_size)
         pix = hp.ang2pix(nside, theta, phi)
-        if mask[pix]:
-            continue
-        ra_list.append(np.rad2deg(phi))
-        dec_list.append(90.0 - np.rad2deg(theta))
 
-    return np.asarray(ra_list), np.asarray(dec_list)
+        # Keep only unmasked
+        keep = ~mask[pix]
+        ra_list.extend(np.rad2deg(phi[keep]).tolist())
+        dec_list.extend((90.0 - np.rad2deg(theta[keep])).tolist())
+
+    return np.asarray(ra_list[:n]), np.asarray(dec_list[:n])
 
 
 def run_null_tests(
@@ -95,7 +100,11 @@ def run_null_tests(
         "isotropic": {"C1": [], "C2": [], "C3": [], "coherence": []},
     }
 
-    for _ in range(n_draws):
+    import sys
+    for i in range(n_draws):
+        if (i + 1) % 10 == 0 or i == 0:
+            print(f"Null test {i + 1}/{n_draws}", file=sys.stderr, flush=True)
+
         # RA scramble null
         ra_counts = _ra_scramble(ra, dec, base_mask, nside, rng)
         ra_axes = _compute_axes_from_counts(ra_counts, mask)
